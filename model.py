@@ -24,12 +24,29 @@ class SpatialSoftmax(nn.Module):
         # x: [b, c, 2] (A 2D coordinate for each channel)
         return x
     
+class RootSquareMLP(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super(RootSquareMLP, self).__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(in_dim, out_dim),
+            nn.ReLU(), ## To make sure the output is positive
+        )
+
+    def forward(self, x):
+        # x: [b (c 2)] -> [b, 2, c]
+        x = x.reshape(x.shape[0], -1, 2).permute(0, 2, 1)
+        x = self.mlp(x**2) # x: [b, 2, out_dim]
+        x = torch.sum(x, dim=1) # x: [b, out_dim]
+        return x**0.5
+    
 class SpatialResNet18(nn.Module):
-    def __init__(self, out_dim=1, pretrained=False):
+    def __init__(self, out_dim=1, pretrained=False, square=False):
         super(SpatialResNet18, self).__init__()
         self.resnet18 = torchvision.models.resnet18(pretrained=pretrained)
         self.resnet18.avgpool = SpatialSoftmax()
-        self.resnet18.fc = nn.Linear(1024, out_dim)
+        self.resnet18.fc = nn.Sequential(
+            nn.Linear(1024, out_dim)
+        ) if not square else RootSquareMLP(512, out_dim)
 
     def forward(self, x):
         return self.resnet18(x)
@@ -38,7 +55,9 @@ class ResNet18(nn.Module):
     def __init__(self, out_dim=1, pretrained=False):
         super(ResNet18, self).__init__()
         self.resnet18 = torchvision.models.resnet18(pretrained=pretrained)
-        self.resnet18.fc = nn.Linear(512, out_dim)
+        self.resnet18.fc = self.resnet18.fc = nn.Sequential(
+            nn.Linear(512, out_dim)
+        )
 
     def forward(self, x):
         return self.resnet18(x)
@@ -46,6 +65,8 @@ class ResNet18(nn.Module):
 def get_model(model_name, pretrained=False):
     if model_name == "spatial_resnet18":
         model = SpatialResNet18(pretrained=pretrained)
+    elif model_name == "spatial_square_resnet18_":
+        model = SpatialResNet18(pretrained=pretrained, square=True)
     elif model_name == "resnet18":
         model = ResNet18(pretrained=pretrained)
     else:

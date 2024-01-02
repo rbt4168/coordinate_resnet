@@ -14,10 +14,17 @@ coord:
   normalize: False
   bs: 32
   epochs: 100
-  model: spatialresnet18
+  model: spatial_resnet18
 
 normAndCoord:
   normalize: True
   bs: 32
   epochs: 100
-  model: spatialresnet18
+  model: spatial_resnet18
+
+normAndCoordAndSquare:
+  normalize: True
+  bs: 32
+  epochs: 100
+  model: spatial_square_resnet18
+  square: True
