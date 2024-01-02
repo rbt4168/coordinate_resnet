@@ -1,0 +1,5 @@
+[default]
+entity = herabbit
+project = owo
+base_url = https://api.wandb.ai
+
