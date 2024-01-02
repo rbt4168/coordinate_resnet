@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import random
 from scipy.ndimage import gaussian_filter
 import json
+import tqdm
 
 def generate_gaussian():
     values = np.zeros((224, 224)) + np.random.randn(224, 224) * 0.7 + 0.5
@@ -52,9 +53,8 @@ def save_to_json(data, filename):
 if __name__ == "__main__":
     # 生成等高線陣列
     ax_dict = {}
-    for i in range(10):
+    for i in tqdm.tqdm(range(int(1e4))):
         contour_array, values, anss = generate_colormap_array()
-        print(values)
         # 將二維陣列轉換為圖片並增加等高線
         ax_dict[f"arr{i}.png"] = anss
         array_to_image_with_contour(contour_array, values, i)
