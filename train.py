@@ -53,20 +53,24 @@ def train(args):
         transforms.ToTensor(),
     ])
     dataset = MyDataset(transform=transform)
-    train_ind = int(len(dataset) * 0.8)
-    valid_ind = len(dataset) - train_ind
-    train_dataset, valid_dataset = torch.utils.data.random_split(dataset, [train_ind, valid_ind])
+    # 70% train, 10% valid, 20% test
+    train_ind = int(len(dataset) * 0.7)
+    valid_ind = int(len(dataset) * 0.8)
+    train_dataset = Subset(dataset, range(train_ind))
+    valid_dataset = Subset(dataset, range(train_ind, valid_ind))
+    test_dataset = Subset(dataset, range(valid_ind, len(dataset)))
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
     model = get_model(model_name)
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     accelerator = Accelerator()
-    model, optimizer, train_loader, valid_loader = accelerator.prepare(
-        model, optimizer, train_loader, valid_loader
+    model, optimizer, train_loader, valid_loader, test_loader = accelerator.prepare(
+        model, optimizer, train_loader, valid_loader, test_loader
     )
 
     for epoch in range(epochs):
@@ -91,6 +95,8 @@ def train(args):
         model.eval()
         valid_loss = []
         valid_corrects = 0
+        best_valid_loss = float("inf")
+        best_valid_acc = 0
         for img, dist in tqdm(valid_loader):
             img = img.to(device)
             if norm_label:
@@ -108,13 +114,43 @@ def train(args):
             valid_loss.append(loss.item())
         print(f"Epoch {epoch} Valid Loss: {sum(valid_loss) / len(valid_loss)}")
         print(f"Epoch {epoch} Valid Acc: {valid_corrects / len(valid_dataset)}")
+        best_valid_loss = min(best_valid_loss, sum(valid_loss) / len(valid_loss))
+        best_valid_acc = max(best_valid_acc, valid_corrects / len(valid_dataset))
         wandb.log({"valid_loss": sum(valid_loss) / len(valid_loss)})
         wandb.log({"valid_5px_acc": valid_corrects / len(valid_dataset)})
+        wandb.log({"best_valid_loss": best_valid_loss})
+        wandb.log({"best_valid_acc": best_valid_acc})
 
-    torch.save(model.state_dict(), "model.pth")
-    wandb.save("model.pth")
+        if best_valid_loss == sum(valid_loss) / len(valid_loss):
+            torch.save(model.state_dict(), "best_model.pth")
+            wandb.save("best_model.pth")
 
+    # test  
+    model.load_state_dict(torch.load("best_model.pth"))
+    model.eval()
+    test_loss = []
+    test_corrects = 0
+    for img, dist in tqdm(test_loader):
+        img = img.to(device)
+        if norm_label:
+            dist = dist / 224.0
+        dist = dist.to(device)
+        pred = model(img)
+        loss = criterion(pred.squeeze(), dist)
+        dist_error = abs(pred.squeeze() - dist) 
+        threshold = 5 # 5 pixels
+        if norm_label:
+            dist_error = dist_error * 224.0
+        # count the number of correct predictions
+        correct = (dist_error <= threshold).sum().item()
+        test_corrects += correct
+        test_loss.append(loss.item())
+    print(f"Test Loss: {sum(test_loss) / len(test_loss)}")
+    print(f"Test Acc: {test_corrects / len(test_dataset)}")
+    wandb.log({"test_loss": sum(test_loss) / len(test_loss)})
+    wandb.log({"test_5px_acc": test_corrects / len(test_dataset)})
 
+    wandb.finish()
 
 if __name__ == "__main__":
     import argparse

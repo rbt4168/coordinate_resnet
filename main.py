@@ -53,7 +53,7 @@ if __name__ == "__main__":
     coordinates_dict = {}
 
     # Generate images and coordinates for a specified number of iterations
-    for i in tqdm.tqdm(range(int(100))):
+    for i in tqdm.tqdm(range(int(10000))):
         image_coordinates = generate_gaussian_image_and_coordinates(i)
         coordinates_dict[f"arr{i}.png"] = image_coordinates
 

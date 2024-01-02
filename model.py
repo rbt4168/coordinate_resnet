@@ -65,7 +65,7 @@ class ResNet18(nn.Module):
 def get_model(model_name, pretrained=False):
     if model_name == "spatial_resnet18":
         model = SpatialResNet18(pretrained=pretrained)
-    elif model_name == "spatial_square_resnet18_":
+    elif model_name == "spatial_square_resnet18":
         model = SpatialResNet18(pretrained=pretrained, square=True)
     elif model_name == "resnet18":
         model = ResNet18(pretrained=pretrained)

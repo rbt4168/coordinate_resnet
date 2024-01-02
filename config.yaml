@@ -1,30 +1,30 @@
 base:
   normalize: False
   bs: 32
-  epochs: 100
+  epochs: 50
   model: resnet18
 
 norm:
   normalize: True
   bs: 32
-  epochs: 100
+  epochs: 50
   model: resnet18
 
 coord:
   normalize: False
   bs: 32
-  epochs: 100
+  epochs: 50
   model: spatial_resnet18
 
 normAndCoord:
   normalize: True
   bs: 32
-  epochs: 100
+  epochs: 50
   model: spatial_resnet18
 
 normAndCoordAndSquare:
   normalize: True
   bs: 32
-  epochs: 100
+  epochs: 50
   model: spatial_square_resnet18
   square: True
