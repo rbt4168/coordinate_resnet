@@ -23,5 +23,6 @@ The script uses synthetic data to create images with Gaussian noise and two rand
 
 For demonstration purposes:
 
-[1](./assets/1.jpg)
-[2](./assets/2.jpg)
+![1](./assets/1.png)
+![2](./assets/2.png)
+![3](./assets/3.png)
