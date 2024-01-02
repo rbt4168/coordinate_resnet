@@ -1,0 +1,23 @@
+base:
+  normalize: False
+  bs: 32
+  epochs: 100
+  model: resnet18
+
+norm:
+  normalize: True
+  bs: 32
+  epochs: 100
+  model: resnet18
+
+coord:
+  normalize: False
+  bs: 32
+  epochs: 100
+  model: spatialresnet18
+
+normAndCoord:
+  normalize: True
+  bs: 32
+  epochs: 100
+  model: spatialresnet18
