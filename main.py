@@ -53,9 +53,9 @@ if __name__ == "__main__":
     coordinates_dict = {}
 
     # Generate images and coordinates for a specified number of iterations
-    for i in tqdm.tqdm(range(int(1e3))):
+    for i in tqdm.tqdm(range(int(100))):
         image_coordinates = generate_gaussian_image_and_coordinates(i)
         coordinates_dict[f"arr{i}.png"] = image_coordinates
 
     # Save the coordinates dictionary to a JSON file
-    save_coordinates_to_json(coordinates_dict, "coordinates.json")
+    save_coordinates_to_json(coordinates_dict, "ans.json")

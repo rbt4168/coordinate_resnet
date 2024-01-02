@@ -19,16 +19,9 @@ The `SpatialResNet18` model is built on top of the ResNet18 architecture, integr
 The standard `ResNet18` model is also provided without the spatial softmax layer. It serves as a baseline ResNet18 architecture for comparison.
 
 ## main.py
-The provided script generates synthetic test data for image processing tasks. It creates images, each with Gaussian noise and two randomly placed points of interest. The images are saved with a recognizable filename in the "pictures" directory, and the coordinates of the two points for each image are stored in a JSON file named "coordinates.json." This synthetic dataset is useful for testing and validating models that analyze spatial information in images.
+The script uses synthetic data to create images with Gaussian noise and two randomly placed points. These images are stored in the "pictures" directory, while the coordinates of the two points in each image are saved in a JSON file called "ans.json."
 
-## Usage
+For demonstration purposes:
 
-### Getting the Model
-
-Use the `get_model` function to obtain an instance of the Coordinate ResNet.
-
-```python
-from coordinate_resnet import get_model
-
-# Get the Coordinate ResNet model
-model = get_model("spatial_resnet18", pretrained=True)
+[1](/assets/1.png)
+[2](/assets/2.png)
