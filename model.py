@@ -55,7 +55,7 @@ class ResNet18(nn.Module):
     def __init__(self, out_dim=1, pretrained=False):
         super(ResNet18, self).__init__()
         self.resnet18 = torchvision.models.resnet18(pretrained=pretrained)
-        self.resnet18.fc = self.resnet18.fc = nn.Sequential(
+        self.resnet18.fc = nn.Sequential(
             nn.Linear(512, out_dim)
         )
 

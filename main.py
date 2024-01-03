@@ -1,9 +1,31 @@
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
+from matplotlib.transforms import Bbox
 import numpy as np
 import random, json
 from scipy.ndimage import gaussian_filter
 import tqdm
+
+def color_maping(num):
+    if(num < 1/6):
+        return (0, 6 * num, 1)
+    elif (num < 2/6):
+        return (0, 1, 1 - (num-1/6)*6)
+    elif (num < 3/6):
+        return ((num-2/6)*6, 1, 0)
+    elif (num < 4/6):
+        return (1, 1 - (num-3/6)*6, 0)
+    elif (num < 5/6):
+        return (1, 0, (num-4/6)*6)
+    else:
+        return (1 - (num-5/6)*6, 0, 1)
+    
+
+def random_color_map():
+    lfmost = random.random() * 0.33
+    middle = lfmost + 0.33
+    rtmost = lfmost + 0.66
+    return [color_maping(lfmost), color_maping(middle), color_maping(rtmost)]
 
 def generate_gaussian_image_and_coordinates(image_number):
     # Create a 224x224 array with Gaussian noise
@@ -27,16 +49,23 @@ def generate_gaussian_image_and_coordinates(image_number):
     colors = [(0, 0, 1), (0, 1, 0), (1, 0, 0)]  # Red, Green, Blue
 
     # Create a custom colormap
-    custom_colormap = LinearSegmentedColormap.from_list('custom_colormap', colors, N=256)
+    custom_colormap = LinearSegmentedColormap.from_list('custom_colormap', random_color_map(), N=256)
 
     # Map values to colors array using the custom colormap
     color_array = custom_colormap(values)
 
     # Plot contour lines of the values
+    plt.clf()
     plt.contour(values, colors='black', linewidths=1)
+    plt.imshow(color_array)
+    # plt.plot(color_array)
 
     # Save the generated image with a recognizable name
-    plt.imsave(f"pictures/arr{image_number}.png", arr=color_array)
+    # plt.imsave(f"pictures/arr{image_number}.png", arr=color_array)
+    plt.axis('off')
+    # fig.savefig('out.png', bbox_inches='tight', pad_inches=0)
+    plt.savefig(f"pictures/arr{image_number}.png", bbox_inches='tight', pad_inches=0)
+    # plt.savefig(f"pictures/arr{image_number}.png", bbox_inches=Bbox([[0, 0], [224, 224]]))
 
     # Store coordinates in a dictionary for each image
     coordinates = {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
@@ -53,7 +82,7 @@ if __name__ == "__main__":
     coordinates_dict = {}
 
     # Generate images and coordinates for a specified number of iterations
-    for i in tqdm.tqdm(range(int(10000))):
+    for i in tqdm.tqdm(range(int(100))):
         image_coordinates = generate_gaussian_image_and_coordinates(i)
         coordinates_dict[f"arr{i}.png"] = image_coordinates
 
