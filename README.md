@@ -1,8 +1,8 @@
-# Coordinate ResNet
+# Spatial ResNet
 
 ## Overview
 
-The Coordinate ResNet is a modified ResNet18 architecture that incorporates spatial information using a custom SpatialSoftmax layer. The model calculates the expected 2D coordinate for each channel, enhancing its ability to capture spatial relationships in the data.
+The Spatial ResNet is a modified ResNet18 architecture that incorporates spatial information using a custom SpatialSoftmax layer. The model calculates the expected 2D coordinate for each channel, enhancing its ability to capture spatial relationships in the data.
 
 ## Components
 
