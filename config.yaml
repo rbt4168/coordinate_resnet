@@ -45,3 +45,10 @@ globalMod:
   bs: 32
   epochs: 100
   model: spatial_global_resnet18
+
+normAndCoordAndMLP2Spectrum:
+  dataset: spectrum
+  normalize: True
+  bs: 32
+  epochs: 50
+  model: spatial_mlp2_resnet18
