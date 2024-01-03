@@ -73,6 +73,8 @@ def train(args):
         model, optimizer, train_loader, valid_loader, test_loader
     )
 
+    best_valid_loss = float("inf")
+    best_valid_acc = 0
     for epoch in range(epochs):
         model.train()
         train_loss = []
@@ -95,8 +97,6 @@ def train(args):
         model.eval()
         valid_loss = []
         valid_corrects = 0
-        best_valid_loss = float("inf")
-        best_valid_acc = 0
         for img, dist in tqdm(valid_loader):
             img = img.to(device)
             if norm_label:

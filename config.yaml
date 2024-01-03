@@ -22,9 +22,26 @@ normAndCoord:
   epochs: 50
   model: spatial_resnet18
 
+normAndCoordAndMLP2:
+  normalize: True
+  bs: 32
+  epochs: 50
+  model: spatial_mlp2_resnet18
+
 normAndCoordAndSquare:
   normalize: True
   bs: 32
   epochs: 50
   model: spatial_square_resnet18
-  square: True
+
+normAndCoordAndFPN:
+  normalize: True
+  bs: 32
+  epochs: 50
+  model: spatial_fpn_resnet18
+
+globalMod:
+  normalize: True
+  bs: 32
+  epochs: 50
+  model: spatial_global_resnet18
