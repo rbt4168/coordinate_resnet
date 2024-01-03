@@ -137,9 +137,7 @@ def train(args):
         ema.eval()
         valid_loss = []
         valid_L1_error = 0
-        valid_corrects_5px = 0
-        valid_corrects_10px = 0
-        valid_corrects_20px = 0
+
         for img, dist in tqdm(valid_loader):
             img = img.to(device)
             if norm_label:
@@ -163,6 +161,9 @@ def train(args):
 
         wandb.log({"best_valid_loss": best_valid_loss})
         wandb.log({"best_valid_L1_error": best_valid_L1_error})
+
+        best_valid_loss = min(best_valid_loss, sum(valid_loss) / len(valid_loss))
+        best_valid_L1_error = min(best_valid_L1_error, valid_L1_error / len(valid_dataset))
 
         if best_valid_loss == sum(valid_loss) / len(valid_loss):
             torch.save(model.state_dict(), "best_model.pth")
