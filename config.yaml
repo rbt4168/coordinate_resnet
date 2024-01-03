@@ -52,3 +52,10 @@ normAndCoordAndMLP2Spectrum:
   bs: 32
   epochs: 50
   model: spatial_mlp2_resnet18
+
+normSpectrum:
+  dataset: spectrum
+  normalize: True
+  bs: 32
+  epochs: 50
+  model: resnet18
