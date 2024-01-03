@@ -1,8 +1,103 @@
 import torch
 from torch import nn
+from torch.nn.functional import softmax
 import torchvision
 from torchvision.ops.feature_pyramid_network import FeaturePyramidNetwork
 from torchvision.models.feature_extraction import create_feature_extractor
+from einops import rearrange, repeat
+
+class ResidualBlock(nn.Module):
+    def __init__(self, dim):
+        super(ResidualBlock, self).__init__()
+        # conv with group norm
+        self.conv = nn.Sequential(
+            nn.Conv2d(dim, dim, 3, padding=1),
+            nn.GroupNorm(32, dim),
+            nn.GELU(),
+            nn.Conv2d(dim, dim, 3, padding=1),
+            nn.GroupNorm(32, dim),
+        )
+    def forward(self, x):
+        return x + self.conv(x)
+    
+class DownBlock(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super(DownBlock, self).__init__()
+        self.downsample = nn.Sequential(
+            nn.Conv2d(in_dim, out_dim, 1, stride=2),
+            nn.GroupNorm(32, out_dim),
+        )
+    def forward(self, x):
+        return self.downsample(x)
+    
+class SpatialAttention(nn.Module):
+    def __init__(self, in_dim, num_heads=8):
+        super(SpatialAttention, self).__init__()
+        self.in_conv = nn.Sequential(
+            nn.Conv2d(in_dim, in_dim, 1),
+            nn.GELU(),
+        )
+        self.attention = nn.MultiheadAttention(in_dim, num_heads=num_heads, batch_first=True)
+
+    def forward(self, x_in):
+        # x: [b, c, h, w]
+        b, c, h, w = x_in.shape
+        x = self.in_conv(x_in)
+        x = rearrange(x, 'b c h w -> b (h w) c')
+        x = self.attention(x, x, x)[0]
+        x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w)
+        return x + x_in
+    
+class MyResNet(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super(MyResNet, self).__init__()
+        # in_res = (224, 224)
+        self.in_conv = nn.Sequential(
+            nn.Conv2d(3, 64, 7, stride=2, padding=3),
+            nn.GroupNorm(32, 64),
+            nn.GELU(),
+            nn.MaxPool2d(3, stride=2, padding=1),
+        ) # out_res = (56, 56)
+        self.layer1 = nn.Sequential(
+            GlobalModulation(64),
+            ResidualBlock(64),
+            ResidualBlock(64),  
+        ) # out_res = (56, 56)
+        self.down1 = DownBlock(64, 128) # out_res = (28, 28)
+        self.layer2 = nn.Sequential(
+            GlobalModulation(128),
+            ResidualBlock(128),
+            ResidualBlock(128),
+            SpatialAttention(128),
+        ) # out_res = (28, 28)
+        self.down2 = DownBlock(128, 256) # out_res = (14, 14)
+        self.layer3 = nn.Sequential(
+            GlobalModulation(256),
+            ResidualBlock(256),
+            ResidualBlock(256),
+            SpatialAttention(256),
+        ) # out_res = (14, 14)
+        self.down3 = DownBlock(256, 512) # out_res = (7, 7)
+        self.layer4 = nn.Sequential(
+            GlobalModulation(512),
+            ResidualBlock(512),
+            ResidualBlock(512),
+            SpatialAttention(512),
+        ) # out_res = (7, 7)
+        self.spatial_softmax = SpatialSoftmax()
+        self.out_fc = nn.Linear(1024, 1)
+
+    def forward(self, x):
+        x = self.in_conv(x)
+        x = self.layer1(x) + x
+        x = self.down1(x)
+        x = self.layer2(x) + x
+        x = self.down2(x)
+        x = self.layer3(x) + x
+        x = self.down3(x)
+        x = self.layer4(x) + x
+        x = self.spatial_softmax(x).reshape(x.shape[0], -1)
+        return self.out_fc(x)
 
 class GlobalModulation(nn.Module):
     def __init__(self, in_dim):
@@ -12,9 +107,28 @@ class GlobalModulation(nn.Module):
     def forward(self, x):
         b, c, h, w = x.shape
         mod = self.fc(self.avg_pool(x).squeeze(-1).squeeze(-1))
-        mult, add = mod[:, :c], mod[:, c:]
+        mult, add = mod[:, :c] + 1, mod[:, c:]
         x = x * mult.reshape(b, c, 1, 1) + add.reshape(b, c, 1, 1)
         return x
+    
+class SpatialAttention(nn.Module):
+    def __init__(self, in_dim, num_heads=8):
+        super(SpatialAttention, self).__init__()
+        self.in_conv = nn.Sequential(
+            nn.Conv2d(in_dim, in_dim, 1),
+            nn.ReLU(),
+        )
+        self.attention = nn.MultiheadAttention(in_dim, num_heads=num_heads, batch_first=True)
+
+    def forward(self, x):
+        # x: [b, c, h, w]
+        b, c, h, w = x.shape
+        x = self.in_conv(x)
+        x = rearrange(x, 'b c h w -> b (h w) c')
+        x = self.attention(x, x, x)[0]
+        x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w)
+        return x
+        
 
 class SpatialSoftmax(nn.Module):
     def __init__(self):
@@ -35,7 +149,7 @@ class SpatialSoftmax(nn.Module):
         x = self.softmax(x).unsqueeze(-1)
         x = torch.sum(x * mesh, dim=2) # calculate the expected value of each channel
         # x: [b, c, 2] (A 2D coordinate for each channel)
-        return x
+        return x + 0.5
     
 class RootSquareMLP(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -52,7 +166,7 @@ class RootSquareMLP(nn.Module):
         return x**0.5
     
 class SpatialResNet18(nn.Module):
-    def __init__(self, out_dim=1, pretrained=False, fc_type="mlp1"):
+    def __init__(self, out_dim=1, pretrained=True, fc_type="mlp1"):
         super(SpatialResNet18, self).__init__()
         self.resnet18 = torchvision.models.resnet18(pretrained=pretrained)
         self.resnet18.avgpool = SpatialSoftmax()
@@ -71,13 +185,39 @@ class SpatialResNet18(nn.Module):
     def forward(self, x):
         x = self.resnet18(x)
         return x
+    
+class SpatialResNet18ColorGate(nn.Module):
+    def __init__(self, out_dim=1, pretrained=True, fc_type="mlp1"):
+        super(SpatialResNet18ColorGate, self).__init__()
+        self.resnet18 = torchvision.models.resnet18(pretrained=pretrained)
+        self.resnet18.avgpool = SpatialSoftmax()
+        # self.resnet18.fc = nn.Identity()
+        
+        if fc_type == "mlp1":
+            self.resnet18.fc = nn.Sequential(
+                nn.Linear(1024, out_dim),
+            )
+        elif fc_type == "mlp2":
+            self.resnet18.fc = nn.Sequential(
+                nn.Linear(1024, 1024),
+                nn.ReLU(),
+                nn.Linear(1024, out_dim)
+            )
+        elif fc_type == "mlpsquare":
+            self.resnet18.fc = RootSquareMLP(1024, out_dim)
+    def forward(self, x):
+        black_pixels = torch.max(x, dim=1, keepdim=True)[0] < 0.5 # [b, 1, h, w]
+        x = torch.abs(x - torch.mean(x, dim=(2, 3), keepdim=True)) # [b, c, h, w]
+        x *= (1 - black_pixels.float())
+        x = self.resnet18(x)
+        return x
 
-class SpatialResNet18GlobalMod(nn.Module):
-    def __init__(self, out_dim=1, pretrained=False, fc_type="mlp1"):
-        super(SpatialResNet18GlobalMod, self).__init__()
+class SpatialResNet18Attn(nn.Module):
+    def __init__(self, out_dim=1, pretrained=True, fc_type="mlp1"):
+        super(SpatialResNet18Attn, self).__init__()
         self.resnet18 = torchvision.models.resnet18(pretrained=pretrained)
         self.resnet18.avgpool = nn.Sequential(
-            GlobalModulation(512),
+            SpatialAttention(512),
             SpatialSoftmax()
         )
         if fc_type == "mlp1":
@@ -173,13 +313,13 @@ def get_model(model_name, pretrained=False):
     elif model_name == "spatial_fpn_resnet18":
         model = SpatialFPN(pretrained=pretrained, fc_type="mlp2")
     elif model_name == "spatial_global_resnet18":
-        model = SpatialResNet18GlobalMod(pretrained=pretrained)
+        model = SpatialResNet18ColorGate(pretrained=pretrained)
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     return model
 
 if __name__ == "__main__":
-    model = SpatialResNet18GlobalMod()
+    model = SpatialResNet18ColorGate()
     dummy = torch.zeros(1, 3, 224, 224)
     out = model(dummy)
     print(out)

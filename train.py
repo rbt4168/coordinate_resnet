@@ -11,6 +11,7 @@ from model import get_model
 from accelerate import Accelerator
 import yaml
 import wandb
+from ema_pytorch import EMA
 
 class MyDataset(torch.utils.data.Dataset):
     def __init__(self, root="", transform=None):
@@ -65,16 +66,23 @@ def train(args):
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
     model = get_model(model_name)
+    ema = EMA(model,
+        beta=0.9995,
+        update_every = 10,
+    )
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     accelerator = Accelerator()
-    model, optimizer, train_loader, valid_loader, test_loader = accelerator.prepare(
-        model, optimizer, train_loader, valid_loader, test_loader
+    model, optimizer, train_loader, valid_loader, test_loader, ema = accelerator.prepare(
+        model, optimizer, train_loader, valid_loader, test_loader, ema
     )
 
     best_valid_loss = float("inf")
-    best_valid_acc = 0
+    
+    best_valid_acc_5px = 0
+    best_valid_acc_10px = 0
+    best_valid_acc_20px = 0
     for epoch in range(epochs):
         model.train()
         train_loss = []
@@ -91,35 +99,52 @@ def train(args):
                 accelerator.backward(loss)
                 optimizer.step()
                 train_loss.append(loss.item())
+                ema.update()
         print(f"Epoch {epoch} Train Loss: {sum(train_loss) / len(train_loss)}")
         wandb.log({"train_loss": sum(train_loss) / len(train_loss)})
 
         model.eval()
+        ema.eval()
         valid_loss = []
-        valid_corrects = 0
+        valid_corrects_5px = 0
+        valid_corrects_10px = 0
+        valid_corrects_20px = 0
         for img, dist in tqdm(valid_loader):
             img = img.to(device)
             if norm_label:
                 dist = dist / 224.0
             dist = dist.to(device)
-            pred = model(img)
+            pred = ema(img)
+            # pred = model(img)
             loss = criterion(pred.squeeze(), dist)
             dist_error = abs(pred.squeeze() - dist) 
-            threshold = 5 # 5 pixels
             if norm_label:
                 dist_error = dist_error * 224.0
             # count the number of correct predictions
-            correct = (dist_error <= threshold).sum().item()
-            valid_corrects += correct
+            correct_5px = (dist_error <= 5).sum().item()
+            correct_10px = (dist_error <= 10).sum().item()
+            correct_20px = (dist_error <= 20).sum().item()
+            valid_corrects_5px += correct_5px
+            valid_corrects_10px += correct_10px
+            valid_corrects_20px += correct_20px
             valid_loss.append(loss.item())
         print(f"Epoch {epoch} Valid Loss: {sum(valid_loss) / len(valid_loss)}")
-        print(f"Epoch {epoch} Valid Acc: {valid_corrects / len(valid_dataset)}")
+        print(f"Epoch {epoch} Valid Acc 5px:  {valid_corrects_5px / len(valid_dataset)}")
+        print(f"Epoch {epoch} Valid Acc 10px: {valid_corrects_10px / len(valid_dataset)}")
+        print(f"Epoch {epoch} Valid Acc 20px: {valid_corrects_20px / len(valid_dataset)}")
         best_valid_loss = min(best_valid_loss, sum(valid_loss) / len(valid_loss))
-        best_valid_acc = max(best_valid_acc, valid_corrects / len(valid_dataset))
+        best_valid_acc_5px = max(best_valid_acc_5px, valid_corrects_5px / len(valid_dataset))
+        best_valid_acc_10px = max(best_valid_acc_10px, valid_corrects_10px / len(valid_dataset))
+        best_valid_acc_20px = max(best_valid_acc_20px, valid_corrects_20px / len(valid_dataset))
+        
         wandb.log({"valid_loss": sum(valid_loss) / len(valid_loss)})
-        wandb.log({"valid_5px_acc": valid_corrects / len(valid_dataset)})
+        wandb.log({"valid_5px_acc": valid_corrects_5px / len(valid_dataset)})
+        wandb.log({"valid_10px_acc": valid_corrects_10px / len(valid_dataset)})
+        wandb.log({"valid_20px_acc": valid_corrects_20px / len(valid_dataset)})
         wandb.log({"best_valid_loss": best_valid_loss})
-        wandb.log({"best_valid_acc": best_valid_acc})
+        wandb.log({"best_valid_acc_5px": best_valid_acc_5px})
+        wandb.log({"best_valid_acc_10px": best_valid_acc_10px})
+        wandb.log({"best_valid_acc_20px": best_valid_acc_20px})
 
         if best_valid_loss == sum(valid_loss) / len(valid_loss):
             torch.save(model.state_dict(), "best_model.pth")
@@ -129,7 +154,9 @@ def train(args):
     model.load_state_dict(torch.load("best_model.pth"))
     model.eval()
     test_loss = []
-    test_corrects = 0
+    test_corrects_5px = 0
+    test_corrects_10px = 0
+    test_corrects_20px = 0
     for img, dist in tqdm(test_loader):
         img = img.to(device)
         if norm_label:
@@ -138,17 +165,22 @@ def train(args):
         pred = model(img)
         loss = criterion(pred.squeeze(), dist)
         dist_error = abs(pred.squeeze() - dist) 
-        threshold = 5 # 5 pixels
         if norm_label:
             dist_error = dist_error * 224.0
         # count the number of correct predictions
-        correct = (dist_error <= threshold).sum().item()
-        test_corrects += correct
+        correct_5px = (dist_error <= 5).sum().item()
+        correct_10px = (dist_error <= 10).sum().item()
+        correct_20px = (dist_error <= 20).sum().item()
+        test_corrects_5px += correct_5px
+        test_corrects_10px += correct_10px
+        test_corrects_20px += correct_20px
         test_loss.append(loss.item())
     print(f"Test Loss: {sum(test_loss) / len(test_loss)}")
-    print(f"Test Acc: {test_corrects / len(test_dataset)}")
+    print(f"Test Acc 5px: {test_corrects_5px / len(test_dataset)}")
     wandb.log({"test_loss": sum(test_loss) / len(test_loss)})
-    wandb.log({"test_5px_acc": test_corrects / len(test_dataset)})
+    wandb.log({"test_5px_acc": test_corrects_5px / len(test_dataset)})
+    wandb.log({"test_10px_acc": test_corrects_10px / len(test_dataset)})
+    wandb.log({"test_20px_acc": test_corrects_20px / len(test_dataset)})
 
     wandb.finish()
 

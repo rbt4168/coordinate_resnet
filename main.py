@@ -6,6 +6,7 @@ import random, json
 from scipy.ndimage import gaussian_filter
 import tqdm
 from PIL import Image
+import multiprocessing as mp
 
 def color_maping(num):
     if(num < 1/6):
@@ -94,8 +95,15 @@ if __name__ == "__main__":
     coordinates_dict = {}
 
     # Generate images and coordinates for a specified number of iterations
-    for i in tqdm.tqdm(range(int(2500))):
-        image_coordinates = generate_gaussian_image_and_coordinates(i)
+    # for i in tqdm.tqdm(range(int(2500))):
+    #     image_coordinates = generate_gaussian_image_and_coordinates(i)
+    #     coordinates_dict[f"arr{i}.png"] = image_coordinates
+    
+    # Create a pool of processes
+    pool = mp.Pool(mp.cpu_count())
+    n_imgs = 10000
+    # Generate images and coordinates for a specified number of iterations
+    for i, image_coordinates in enumerate(pool.imap(generate_gaussian_image_and_coordinates, range(int(10000)))):
         coordinates_dict[f"arr{i}.png"] = image_coordinates
 
     # Save the coordinates dictionary to a JSON file

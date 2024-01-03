@@ -43,5 +43,5 @@ normAndCoordAndFPN:
 globalMod:
   normalize: True
   bs: 32
-  epochs: 50
+  epochs: 100
   model: spatial_global_resnet18
