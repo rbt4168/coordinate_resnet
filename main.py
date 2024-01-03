@@ -26,7 +26,9 @@ def random_color_map():
     lfmost = random.random() * 0.33
     middle = lfmost + 0.33
     rtmost = lfmost + 0.66
-    return [color_maping(lfmost), color_maping(middle), color_maping(rtmost)]
+    outcome = [color_maping(lfmost), color_maping(middle), color_maping(rtmost)]
+    random.shuffle(outcome)
+    return outcome
 
 def resize_and_save_image(input_path, output_path, new_size):
     # Open the image file
@@ -94,7 +96,7 @@ if __name__ == "__main__":
     coordinates_dict = {}
 
     # Generate images and coordinates for a specified number of iterations
-    for i in tqdm.tqdm(range(int(100))):
+    for i in tqdm.tqdm(range(int(2500))):
         image_coordinates = generate_gaussian_image_and_coordinates(i)
         coordinates_dict[f"arr{i}.png"] = image_coordinates
 
