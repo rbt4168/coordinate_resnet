@@ -68,18 +68,16 @@ def generate_gaussian_image_and_coordinates(image_number):
 
     # Plot contour lines of the values
     plt.clf()
+    fig = plt.figure(figsize=(4,4))
+    plt.axis('off')
+
     plt.contour(values, colors='black', linewidths=1)
+    
     plt.imshow(color_array)
-    # plt.plot(color_array)
 
     # Save the generated image with a recognizable name
-    # plt.imsave(f"pictures/arr{image_number}.png", arr=color_array)
-    plt.axis('off')
-    # fig.savefig('out.png', bbox_inches='tight', pad_inches=0)
-    plt.savefig("pictures/tmp.png", bbox_inches='tight', pad_inches=0)
-
-    resize_and_save_image("pictures/tmp.png", f"pictures/arr{image_number}.png", (224, 224))
-    # plt.savefig(f"pictures/arr{image_number}.png", bbox_inches=Bbox([[0, 0], [224, 224]]))
+    plt.savefig(f"pictures/arr{image_number}.png", dpi=56, bbox_inches='tight', pad_inches=0)
+    plt.close()
 
     # Store coordinates in a dictionary for each image
     coordinates = {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
