@@ -5,6 +5,7 @@ import numpy as np
 import random, json
 from scipy.ndimage import gaussian_filter
 import tqdm
+from PIL import Image
 
 def color_maping(num):
     if(num < 1/6):
@@ -26,6 +27,15 @@ def random_color_map():
     middle = lfmost + 0.33
     rtmost = lfmost + 0.66
     return [color_maping(lfmost), color_maping(middle), color_maping(rtmost)]
+
+def resize_and_save_image(input_path, output_path, new_size):
+    # Open the image file
+    with Image.open(input_path) as img:
+        # Resize the image
+        resized_img = img.resize(new_size)
+        
+        # Save the resized image
+        resized_img.save(output_path)
 
 def generate_gaussian_image_and_coordinates(image_number):
     # Create a 224x224 array with Gaussian noise
@@ -64,7 +74,9 @@ def generate_gaussian_image_and_coordinates(image_number):
     # plt.imsave(f"pictures/arr{image_number}.png", arr=color_array)
     plt.axis('off')
     # fig.savefig('out.png', bbox_inches='tight', pad_inches=0)
-    plt.savefig(f"pictures/arr{image_number}.png", bbox_inches='tight', pad_inches=0)
+    plt.savefig("pictures/tmp.png", bbox_inches='tight', pad_inches=0)
+
+    resize_and_save_image("pictures/tmp.png", f"pictures/arr{image_number}.png", (224, 224))
     # plt.savefig(f"pictures/arr{image_number}.png", bbox_inches=Bbox([[0, 0], [224, 224]]))
 
     # Store coordinates in a dictionary for each image
