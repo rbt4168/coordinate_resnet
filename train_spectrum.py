@@ -217,6 +217,9 @@ def train(args):
         L1_error = dist_error.sum().item()
         test_L1_error += L1_error
         test_loss.append(loss.item())
+        test_4_acc += (dist_error <= 4).sum().item()
+        test_10_acc += (dist_error <= 10).sum().item()
+        test_20_acc += (dist_error <= 20).sum().item()
     print(f"Test Loss: {sum(test_loss) / len(test_loss)}")
     print(f"Test L1 Error: {test_L1_error / len(test_dataset)}")
     print(f"Test Acc 4  (1.0%): {test_4_acc / len(test_dataset)}")
