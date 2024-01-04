@@ -162,7 +162,7 @@ class HybridSpatialSoftmax(nn.Module):
             nn.GELU(),
         )
         self.semantic_head = nn.Sequential(
-            nn.Conv2d(512 * 7 * 7, 1024, 1),
+            nn.Conv2d(512, 1024, 1),
             nn.GELU(),
             nn.Conv2d(1024, 512, 1),
             nn.Sigmoid(),
