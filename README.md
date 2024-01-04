@@ -45,7 +45,7 @@ Here, $E[x]$ and $E[y]$ represent the expected values for $x$ and $y$ coordinate
 
 This enables us to calculate the expected point of interest by using the softmax-transformed matrix $S$ and the coordinate array $C_k$.
 
-## main.py
+## generate.py
 The script uses synthetic data to create images with Gaussian noise and two randomly placed points. These images are stored in the "pictures" directory, while the coordinates of the two points in each image are saved in a JSON file called "ans.json."
 
 For demonstration purposes:
