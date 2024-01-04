@@ -6,17 +6,44 @@ The Spatial ResNet is a modified ResNet18 architecture that incorporates spatial
 
 ## Components
 
-### 1. SpatialSoftmax
+### SpatialSoftmax: Mathematical Dependence on Softmax-transformed Matrices for Expected Point Estimation
 
-The `SpatialSoftmax` module is a custom PyTorch layer that applies spatial softmax along the height and width dimensions of an input tensor. It computes the expected 2D coordinate for each channel, enabling the model to capture spatial information effectively.
+Let $A$ be a $k \times k$ matrix, and $S$ is $A$ after the softmax function $f: \mathbb{R}^{k \times k} \rightarrow \mathbb{R}^{k \times k}$, that is $S = f(A)$.
 
-### 2. SpatialResNet18
+Flatten $S$, where $S_{(x,y)}$ denotes the element at position $(x, y)$ of $S$:
 
-The `SpatialResNet18` model is built on top of the ResNet18 architecture, integrating the `SpatialSoftmax` layer. This modification replaces the average pooling layer with spatial softmax and adapts the fully connected layer for the desired output dimension.
+$$
+S_{\text{flat}} = [S_{(0,0)}, S_{(0,1)}, \ldots, S_{(k-1,k-1)}]
+$$
 
-### 3. ResNet18
+And it holds that $\sum S_{\text{flat}} = 1$.
 
-The standard `ResNet18` model is also provided without the spatial softmax layer. It serves as a baseline ResNet18 architecture for comparison.
+We can interpret $S_{\text{flat}}$ as the probability distribution over the points of interest.
+
+Now, construct an array of coordinates:
+
+$$
+C_{k} = \begin{bmatrix}
+0 & 0 & \cdots & 0 & 1 & \cdots & k-1 \\
+0 & 1 & \cdots & k-1 & 0 & \cdots & k-1 \\
+\end{bmatrix}
+$$
+
+Multiplying them, we obtain:
+
+$$
+C_kS_{flat}^T = \sum_{0\leq x,y < k }\begin{bmatrix}
+x  \\
+ y
+\end{bmatrix} \times S_{(x,y)} = \begin{bmatrix}
+E[x] \\
+E[y]
+\end{bmatrix}
+$$
+
+Here, $E[x]$ and $E[y]$ represent the expected values for $x$ and $y$ coordinates, respectively, based on the probabilities of each point.
+
+This enables us to calculate the expected point of interest by using the softmax-transformed matrix $S$ and the coordinate array $C_k$.
 
 ## main.py
 The script uses synthetic data to create images with Gaussian noise and two randomly placed points. These images are stored in the "pictures" directory, while the coordinates of the two points in each image are saved in a JSON file called "ans.json."
