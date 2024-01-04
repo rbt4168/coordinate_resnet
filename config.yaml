@@ -59,3 +59,17 @@ normSpectrum:
   bs: 32
   epochs: 50
   model: resnet18
+
+normHybridSpectrum:
+  dataset: spectrum
+  normalize: True
+  bs: 32
+  epochs: 50
+  model: hybrid_mlp2_resnet18
+
+normFPNSpectrum:
+  dataset: spectrum
+  normalize: True
+  bs: 32
+  epochs: 50
+  model: FPN_mlp2_resnet18

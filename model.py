@@ -150,6 +150,40 @@ class SpatialSoftmax(nn.Module):
         x = torch.sum(x * mesh, dim=2) # calculate the expected value of each channel
         # x: [b, c, 2] (A 2D coordinate for each channel)
         return x + 0.5
+
+class HybridSpatialSoftmax(nn.Module):
+    def __init__(self):
+        super(HybridSpatialSoftmax, self).__init__()
+        self.softmax = nn.Softmax(dim=1)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.spatial_head = nn.Conv2d(512, 512, 1)
+        self.coordinate_embed = nn.Sequential(
+            nn.Linear(2, 512),
+            nn.GELU(),
+        )
+        self.semantic_head = nn.Sequential(
+            nn.Conv2d(512 * 7 * 7, 1024, 1),
+            nn.GELU(),
+            nn.Conv2d(1024, 512, 1),
+            nn.Sigmoid(),
+        ) # [b, 1, 1, 1], semantic gating
+        self.out_project = nn.Linear(512, 1)
+
+    def forward(self, x):
+        b, c, h, w = x.shape
+        u = torch.arange(h, dtype=torch.float32, device=x.device) / (h - 1)
+        v = torch.arange(w, dtype=torch.float32, device=x.device) / (w - 1)
+        mesh_u, mesh_v = torch.meshgrid(u, v)
+        mesh_u = mesh_u.reshape(-1)
+        mesh_v = mesh_v.reshape(-1)
+        mesh = torch.stack((mesh_u, mesh_v), dim=1)
+        mesh = mesh.reshape(1, 1, -1, 2)
+        mesh = mesh.repeat(b, 1, 1, 1)
+        x1 = self.spatial_head(x).reshape(b, c, -1)
+        x1 = self.softmax(x1).unsqueeze(-1)
+        x1 = torch.sum(x1 * mesh, dim=2) # [b, c, 2] calculate the expected value of each channel
+        g = self.semantic_head(self.avg_pool(x)).reshape(b, c, 1)
+        return self.out_project(g * self.coordinate_embed(x1)).squeeze(-1) 
     
 class RootSquareMLP(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -182,6 +216,25 @@ class SpatialResNet18(nn.Module):
             )
         elif fc_type == "mlpsquare":
             self.resnet18.fc = RootSquareMLP(1024, out_dim)
+    def forward(self, x):
+        x = self.resnet18(x)
+        return x
+
+class HybridResNet18(nn.Module):
+    def __init__(self, out_dim=1, pretrained=True, fc_type="mlp1"):
+        super(HybridResNet18, self).__init__()
+        self.resnet18 = torchvision.models.resnet18(pretrained=pretrained)
+        self.resnet18.avgpool = HybridSpatialSoftmax()
+        if fc_type == "mlp1":
+            self.resnet18.fc = nn.Sequential(
+                nn.Linear(512, out_dim),
+            )
+        elif fc_type == "mlp2":
+            self.resnet18.fc = nn.Sequential(
+                nn.Linear(512, 1024),
+                nn.ReLU(),
+                nn.Linear(1024, out_dim)
+            )
     def forward(self, x):
         x = self.resnet18(x)
         return x
@@ -288,6 +341,48 @@ class SpatialFPN(nn.Module):
         x = self.pool(x) # [b, c 2] -> [b, c*2]
         x = self.fc(x.reshape(x.shape[0], -1))
         return x
+
+class FPN(nn.Module):
+    def __init__(self, out_dim=1, pretrained=False, fc_type="mlp1"):
+        super(FPN, self).__init__()
+        m = torchvision.models.resnet18(pretrained=pretrained)
+        m.avgpool = nn.Identity()
+        m.fc = nn.Identity()
+        
+        self.body = create_feature_extractor(
+            m, return_nodes={f'layer{k}': str(v)
+                             for v, k in enumerate([1, 2, 3, 4])})
+        # dry run to get the number of channels
+        with torch.no_grad():
+            dummy = torch.zeros(1, 3, 224, 224)
+            out = self.body(dummy)
+        self.in_channels_list = [o.shape[1] for o in out.values()]
+
+        fc_in_dim = 960
+        if fc_type == "mlp1":
+            self.fc = nn.Sequential(
+                nn.Linear(fc_in_dim, out_dim),
+            )
+        elif fc_type == "mlp2":
+            self.fc = nn.Sequential(
+                nn.Linear(fc_in_dim, 1024),
+                nn.ReLU(),
+                nn.Linear(1024, out_dim)
+            )
+        else:
+            raise ValueError(f"Unknown fc_type: {fc_type}")
+
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        
+        
+    def forward(self, x):
+        x = self.body(x)
+        # upsample and concat features
+        _, _, h, w = x["0"].shape
+        layers = [self.avgpool(x[f"{i}"]) for i in range(4)]
+        x = torch.cat(layers, dim=1)
+        x = self.fc(x.reshape(x.shape[0], -1))
+        return x
         
     
 class ResNet18(nn.Module):
@@ -314,6 +409,10 @@ def get_model(model_name, pretrained=False):
         model = SpatialFPN(pretrained=pretrained, fc_type="mlp2")
     elif model_name == "spatial_global_resnet18":
         model = SpatialResNet18ColorGate(pretrained=pretrained)
+    elif model_name == "hybrid_mlp2_resnet18":
+        model = HybridResNet18(pretrained=pretrained, fc_type="mlp2")
+    elif model_name == "FPN_mlp2_resnet18":
+        model = FPN(pretrained=pretrained, fc_type="mlp2")
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     return model

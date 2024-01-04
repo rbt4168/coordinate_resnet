@@ -40,11 +40,14 @@ class MyDataset(torch.utils.data.Dataset):
         return img.float(), float(dist)
 
 class SpectrmuDataset(torch.utils.data.Dataset):
-    def __init__(self, root="", transform=None):
+    def __init__(self, root="", transform=None, split="train"):
         self.root = root
         self.transform = transform
         picture_path = os.path.join(root, "resized_spectrum/new_spectrum", "*.png")
-        self.imgs = list(sorted(glob(picture_path)))
+        data_split_path = os.path.join(root, "data_split.json")
+        with open(data_split_path, "r") as f:
+            data_split = json.load(f)
+        self.imgs = data_split[split]
         with open(os.path.join(root, "label.json"), "r") as f:
             self.ans = json.load(f)
 
@@ -52,7 +55,7 @@ class SpectrmuDataset(torch.utils.data.Dataset):
         return len(self.imgs)   
     
     def __getitem__(self, idx):
-        img_path = self.imgs[idx]
+        img_path = os.path.join(self.root, self.imgs[idx])
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             img = Image.open(img_path).convert("RGB")
@@ -62,7 +65,7 @@ class SpectrmuDataset(torch.utils.data.Dataset):
         else:
             img = transforms.ToTensor()(img)
             
-        label_data = self.ans[img_path.split("/")[-1]]
+        label_data = self.ans[img_path.replace("\\", "/").split("/")[-1]]
 
         return img.float()[:3], label_data
 
@@ -82,20 +85,23 @@ def train(args):
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
     ])
+
+    # 70% train, 10% valid, 20% test
     if dataset == "default":
         dataset = MyDataset(transform=transform)
+        train_ind = int(len(dataset) * 0.7)
+        valid_ind = int(len(dataset) * 0.8)
+        train_dataset = Subset(dataset, range(train_ind))
+        valid_dataset = Subset(dataset, range(train_ind, valid_ind))
+        test_dataset = Subset(dataset, range(valid_ind, len(dataset)))
     elif dataset == "spectrum":
-        dataset = SpectrmuDataset(root="../data", transform=transform)
-    # 70% train, 10% valid, 20% test
-    train_ind = int(len(dataset) * 0.7)
-    valid_ind = int(len(dataset) * 0.8)
-    train_dataset = Subset(dataset, range(train_ind))
-    valid_dataset = Subset(dataset, range(train_ind, valid_ind))
-    test_dataset = Subset(dataset, range(valid_ind, len(dataset)))
+        train_dataset = SpectrmuDataset(root="../data", transform=transform, split="train")
+        valid_dataset = SpectrmuDataset(root="../data", transform=transform, split="valid")
+        test_dataset = SpectrmuDataset(root="../data", transform=transform, split="test")
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8)
-    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
     model = get_model(model_name)
     ema = EMA(model,
@@ -112,6 +118,9 @@ def train(args):
 
     best_valid_loss = float("inf")
     best_valid_L1_error = float("inf")  
+    best_valid_4_acc = 0
+    best_valid_10_acc = 0
+    best_valid_20_acc = 0
     
     for epoch in range(epochs):
         model.train()
@@ -137,6 +146,9 @@ def train(args):
         ema.eval()
         valid_loss = []
         valid_L1_error = 0
+        valid_4_acc = 0
+        valid_10_acc = 0
+        valid_20_acc = 0
 
         for img, dist in tqdm(valid_loader):
             img = img.to(device)
@@ -153,17 +165,30 @@ def train(args):
             L1_error = dist_error.sum().item()
             valid_L1_error += L1_error
             valid_loss.append(loss.item())
+            valid_4_acc += (dist_error <= 4).sum().item()
+            valid_10_acc += (dist_error <= 10).sum().item()
+            valid_20_acc += (dist_error <= 20).sum().item()
         print(f"Epoch {epoch} Valid Loss: {sum(valid_loss) / len(valid_loss)}")
         print(f"Epoch {epoch} Valid L1 Error: {valid_L1_error / len(valid_dataset)}")
+        print(f"Epoch {epoch} Valid Acc 4  (1.0%): {valid_4_acc / len(valid_dataset)}")
+        print(f"Epoch {epoch} Valid Acc 10 (2.5%): {valid_10_acc / len(valid_dataset)}")
+        print(f"Epoch {epoch} Valid Acc 20 (5.0%): {valid_20_acc / len(valid_dataset)}")
+
         
         wandb.log({"valid_loss": sum(valid_loss) / len(valid_loss)})
         wandb.log({"valid_L1_error": valid_L1_error / len(valid_dataset)})
 
         wandb.log({"best_valid_loss": best_valid_loss})
         wandb.log({"best_valid_L1_error": best_valid_L1_error})
+        wandb.log({"best_valid_4_acc  (1.0%)": best_valid_4_acc})
+        wandb.log({"best_valid_10_acc (2.5%)": best_valid_10_acc})
+        wandb.log({"best_valid_20_acc (5.0%)": best_valid_20_acc})
 
         best_valid_loss = min(best_valid_loss, sum(valid_loss) / len(valid_loss))
         best_valid_L1_error = min(best_valid_L1_error, valid_L1_error / len(valid_dataset))
+        best_valid_4_acc = max(best_valid_4_acc, valid_4_acc / len(valid_dataset))
+        best_valid_10_acc = max(best_valid_10_acc, valid_10_acc / len(valid_dataset))
+        best_valid_20_acc = max(best_valid_20_acc, valid_20_acc / len(valid_dataset))
 
         if best_valid_loss == sum(valid_loss) / len(valid_loss):
             torch.save(model.state_dict(), "best_model.pth")
@@ -174,6 +199,9 @@ def train(args):
     model.eval()
     test_loss = []
     test_L1_error = 0
+    test_4_acc = 0 
+    test_10_acc = 0
+    test_20_acc = 0
 
     for img, dist in tqdm(test_loader):
         img = img.to(device)
@@ -191,8 +219,14 @@ def train(args):
         test_loss.append(loss.item())
     print(f"Test Loss: {sum(test_loss) / len(test_loss)}")
     print(f"Test L1 Error: {test_L1_error / len(test_dataset)}")
+    print(f"Test Acc 4  (1.0%): {test_4_acc / len(test_dataset)}")
+    print(f"Test Acc 10 (2.5%): {test_10_acc / len(test_dataset)}")
+    print(f"Test Acc 20 (5.0%): {test_20_acc / len(test_dataset)}")
     wandb.log({"test_loss": sum(test_loss) / len(test_loss)})
     wandb.log({"test_L1_error": test_L1_error / len(test_dataset)})
+    wandb.log({"test_4_acc  (1.0%)": test_4_acc / len(test_dataset)})
+    wandb.log({"test_10_acc (2.5%)": test_10_acc / len(test_dataset)})
+    wandb.log({"test_20_acc (5.0%)": test_20_acc / len(test_dataset)})
     wandb.finish()
 
 if __name__ == "__main__":
