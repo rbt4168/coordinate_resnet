@@ -4,9 +4,7 @@
 
 The Spatial ResNet is a modified ResNet18 architecture that incorporates spatial information using a custom SpatialSoftmax layer. The model calculates the expected 2D coordinate for each channel, enhancing its ability to capture spatial relationships in the data.
 
-## Components
-
-### SpatialSoftmax: Mathematical Dependence on Softmax-transformed Matrices for Expected Point Estimation
+## Mathematical Dependence on Softmax-transformed Matrices for Expected Point Estimation
 
 Let $A$ be a $k \times k$ matrix, and $S$ is $A$ after the softmax function $f: \mathbb{R}^{k \times k} \rightarrow \mathbb{R}^{k \times k}$, that is $S = f(A)$.
 
