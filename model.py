@@ -234,11 +234,14 @@ class XResNet(nn.Module):
         self.layer3 = self.make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self.make_layer(block, 512, layers[3], stride=2)
 
+        self.normal_pool = nn.AdaptiveAvgPool2d((1, 1))
+
         self.avgpool = nn.Sequential(
             XSelfAttention(512),
             SpatialSoftmax(),
         ) # nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(1024, num_classes)
+
+        self.fc = nn.Linear(1024 + 512, num_classes)
 
     def make_layer(self, block, out_channels, blocks, stride=1):
         layers = []
@@ -258,10 +261,11 @@ class XResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-
+        x2 = self.normal_pool(x)
         x = self.avgpool(x)
+        x2 = x2.reshape(x2.size(0), -1)
         x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        x = self.fc(torch.cat([x, x2], dim=1))
         return x
 
 class GlobalModulation(nn.Module):
