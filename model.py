@@ -612,7 +612,7 @@ class DoubleFeature(nn.Module):
         self.rnn = nn.LSTM(input_size=49, hidden_size=49, num_layers=2, batch_first=True)
 
         # Cross-Attention layer
-        self.cross_attention = nn.MultiheadAttention(embed_dim=512, num_heads=8)
+        self.cross_attention = nn.MultiheadAttention(embed_dim=49, num_heads=7)
 
         self.spatial = SpatialSoftmax()
         
@@ -633,12 +633,11 @@ class DoubleFeature(nn.Module):
         # Apply RNN layer
         x, _ = self.rnn(x)
 
-        x = x.view(bsz, 512, 7, 7)
+        x = x.view(bsz, 512, 49)
 
         # Apply Cross-Attention
-        x = x.permute(0, 2, 3, 1).view(bsz, 49, 512)  # Change shape for cross-attention
         att_output, _ = self.cross_attention(x, x, x)
-        att_output = att_output.view(bsz, 7, 7, 512).permute(0, 3, 1, 2)
+        att_output = att_output.view(bsz, 512, 7, 7)
 
         # Apply Spatial Softmax
         x = self.spatial(att_output)
