@@ -198,8 +198,8 @@ class SelfAttention1D(nn.Module):
 class XSelfAttention(nn.Module):
     def __init__(self, in_channels):
         super(XSelfAttention, self).__init__()
-        self.query = nn.Conv2d(in_channels, in_channels // 256, kernel_size=1)
-        self.key = nn.Conv2d(in_channels, in_channels // 256, kernel_size=1)
+        self.query = nn.Conv2d(in_channels, in_channels // 2, kernel_size=1)
+        self.key = nn.Conv2d(in_channels, in_channels // 2, kernel_size=1)
         self.value = nn.Conv2d(in_channels, in_channels, kernel_size=1)
         self.gamma = nn.Parameter(torch.zeros(1))
 
@@ -268,7 +268,12 @@ class XResNet(nn.Module):
         )
         # nn.AdaptiveAvgPool2d((1, 1))
 
-        self.fc = nn.Linear(1024 + 512, num_classes)
+        self.fc1 = nn.Linear(1024, 512)
+
+        self.fc2 = nn.Sequential(
+            nn.ReLU(),
+            nn.Linear(1024, num_classes)
+        ) 
 
     def make_layer(self, block, out_channels, blocks, stride=1):
         layers = []
@@ -288,12 +293,15 @@ class XResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        x2 = self.normal_pool(x)
+
+        x_n = self.normal_pool(x)
+        x_n = x_n.reshape(x_n.size(0), -1)
+
         x = self.avgpool(x)
-        x2 = x2.reshape(x2.size(0), -1)
         x = x.view(x.size(0), -1)
-        x = self.fc(torch.cat([x, x2], dim=1))
-        return x
+        x = self.fc1(x)
+
+        return self.fc2(torch.cat([x, x_n], dim=1))
 
 class GlobalModulation(nn.Module):
     def __init__(self, in_dim):
