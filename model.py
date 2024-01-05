@@ -628,19 +628,17 @@ class DoubleFeature(nn.Module):
         x = self.resnet18(x)
 
         bsz = x.size(0)
-        x = x.reshape(bsz, 512, -1)
+        x = x.view(bsz, 512, -1)
 
         # Apply RNN layer
         x, _ = self.rnn(x)
 
-        x = x.view(bsz, 512, 49)
+        x += x
 
-        # Apply Cross-Attention
-        att_output, _ = self.cross_attention(x, x, x)
-        att_output = att_output.view(bsz, 512, 7, 7)
+        x = x.view(bsz, 512, 7, 7)
 
         # Apply Spatial Softmax
-        x = self.spatial(att_output)
+        x = self.spatial(x)
 
         x = x.view(bsz, -1)
 
