@@ -234,7 +234,10 @@ class XResNet(nn.Module):
         self.layer3 = self.make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self.make_layer(block, 512, layers[3], stride=2)
 
-        self.avgpool = SpatialSoftmax()# nn.AdaptiveAvgPool2d((1, 1))
+        self.avgpool = nn.Sequential(
+            XSelfAttention(512),
+            SpatialSoftmax(),
+        ) # nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(1024, num_classes)
 
     def make_layer(self, block, out_channels, blocks, stride=1):
@@ -291,7 +294,6 @@ class SpatialAttention(nn.Module):
         x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w)
         return x
         
-
 class SpatialSoftmax(nn.Module):
     def __init__(self):
         super(SpatialSoftmax, self).__init__()
@@ -576,7 +578,7 @@ def get_model(model_name, pretrained=False):
     elif model_name == "FPN_mlp2_resnet18":
         model = FPN(pretrained=pretrained, fc_type="mlp2")
     elif model_name == "testing":
-        model = XResNet(ResidualBlockWithAttention, [2, 2, 2, 2])
+        model = XResNet(XResidualBlock, [2, 2, 2, 2])
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     return model
