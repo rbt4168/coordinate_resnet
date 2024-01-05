@@ -169,11 +169,37 @@ class XResidualBlock(nn.Module):
         out = self.relu(out)
         return out
 
+
+class SelfAttention1D(nn.Module):
+    def __init__(self, in_channels):
+        super(SelfAttention1D, self).__init__()
+        self.query = nn.Linear(in_channels, in_channels)
+        self.key = nn.Linear(in_channels, in_channels)
+        self.value = nn.Linear(in_channels, in_channels)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        # Calculate query, key, and value
+        query = self.query(x)
+        key = self.key(x)
+        value = self.value(x)
+
+        # Calculate attention scores
+        scores = torch.matmul(query, key.transpose(-2, -1)) / torch.sqrt(torch.tensor(x.size(-1), dtype=torch.float32))
+
+        # Apply softmax to obtain attention weights
+        attention_weights = self.softmax(scores)
+
+        # Apply attention weights to the value
+        attended_values = torch.matmul(attention_weights, value)
+
+        return attended_values
+
 class XSelfAttention(nn.Module):
     def __init__(self, in_channels):
         super(XSelfAttention, self).__init__()
-        self.query = nn.Conv2d(in_channels, in_channels // 8, kernel_size=1)
-        self.key = nn.Conv2d(in_channels, in_channels // 8, kernel_size=1)
+        self.query = nn.Conv2d(in_channels, in_channels // 256, kernel_size=1)
+        self.key = nn.Conv2d(in_channels, in_channels // 256, kernel_size=1)
         self.value = nn.Conv2d(in_channels, in_channels, kernel_size=1)
         self.gamma = nn.Parameter(torch.zeros(1))
 
@@ -239,7 +265,8 @@ class XResNet(nn.Module):
         self.avgpool = nn.Sequential(
             XSelfAttention(512),
             SpatialSoftmax(),
-        ) # nn.AdaptiveAvgPool2d((1, 1))
+        )
+        # nn.AdaptiveAvgPool2d((1, 1))
 
         self.fc = nn.Linear(1024 + 512, num_classes)
 
