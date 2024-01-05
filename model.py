@@ -605,26 +605,40 @@ class DoubleFeature(nn.Module):
 
         # Load a pre-trained ResNet-18 model as the extractor
         self.resnet18 = torchvision.models.resnet18(pretrained=False)
-        self.resnet18.avgpool = SpatialSoftmax()
+        self.resnet18.avgpool = nn.Sequential()
         self.resnet18.fc = nn.Sequential()
 
+        # RNN layer
+        self.rnn = nn.LSTM(input_size=49, hidden_size=49, num_layers=2, batch_first=True)
+        self.spatial = SpatialSoftmax()
+        
+
         # Contrastive loss layer
-        self.fc1 = nn.Linear(1024, 32)
-        self.fc1_2 = nn.Linear(32, 1)
-        self.fc2 = nn.Sequential(
+        self.fc = nn.Sequential(
+            nn.Linear(1024, 128),
             nn.ReLU(),
-            nn.Linear(1024 + 32, 1),
+            nn.Linear(128, 1)
         )
 
     def forward(self, x):
         x = self.resnet18(x)
 
-        y1 = self.fc1(x)
-        y2 = self.fc2(torch.concat([x, y1], dim=1))
-        y1 = self.fc1_2(y1)
+        bsz = x.size(0)
+        x = x.reshape(bsz, 512, -1)
+
+        # Apply RNN layer
+        x, _ = self.rnn(x)
+
+        x = x.reshape(bsz, 512, 7, 7)
+
+        x = self.spatial(x)
+
+        x = x.reshape(bsz, -1)
+
+        x = self.fc(x)
 
         # Compute the contrastive loss
-        return torch.abs(y1 - y2)
+        return x
 
 def get_model(model_name, pretrained=False):
     if model_name == "spatial_resnet18":
