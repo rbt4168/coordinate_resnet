@@ -198,8 +198,8 @@ class SelfAttention1D(nn.Module):
 class XSelfAttention(nn.Module):
     def __init__(self, in_channels):
         super(XSelfAttention, self).__init__()
-        self.query = nn.Conv2d(in_channels, in_channels // 2, kernel_size=1)
-        self.key = nn.Conv2d(in_channels, in_channels // 2, kernel_size=1)
+        self.query = nn.Conv2d(in_channels, in_channels // 16, kernel_size=1)
+        self.key = nn.Conv2d(in_channels, in_channels // 16, kernel_size=1)
         self.value = nn.Conv2d(in_channels, in_channels, kernel_size=1)
         self.gamma = nn.Parameter(torch.zeros(1))
 
@@ -617,13 +617,13 @@ def get_model(model_name, pretrained=False):
     elif model_name == "FPN_mlp2_resnet18":
         model = FPN(pretrained=pretrained, fc_type="mlp2")
     elif model_name == "testing":
-        model = XResNet(XResidualBlock, [2, 2, 2, 2])
+        model = XResNet(ResidualBlockWithAttention, [2, 2, 2, 2])
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     return model
 
 if __name__ == "__main__":
-    model = XResNet(XResidualBlock, [2, 2, 2, 2])
+    model = XResNet(ResidualBlockWithAttention, [2, 2, 2, 2])
     dummy = torch.zeros(1, 3, 224, 224)
     out = model(dummy)
     print(out)
