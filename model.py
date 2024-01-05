@@ -609,7 +609,7 @@ class DoubleFeature(nn.Module):
         self.resnet18.fc = nn.Sequential()
 
         # RNN layer
-        self.rnn = nn.LSTM(input_size=49, hidden_size=49, num_layers=2, batch_first=True)
+        self.rnn = nn.LSTM(input_size=49, hidden_size=49, num_layers=3, batch_first=True)
 
         # Cross-Attention layer
         self.cross_attention = nn.MultiheadAttention(embed_dim=49, num_heads=7)
