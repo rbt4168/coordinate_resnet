@@ -610,15 +610,13 @@ class DoubleFeature(nn.Module):
 
         # RNN layer
         # self.rnn = nn.LSTM(input_size=49, hidden_size=49, num_layers=3, batch_first=True)
-        rnn_layers = [nn.LSTM(input_size=49, hidden_size=49, num_layers=3, batch_first=True) for _ in range(10)]
-        self.rnn = nn.ModuleList(rnn_layers)
+        self.rnn = nn.RNN(input_size=49, hidden_size=49, num_layers=2, batch_first=True)
 
         self.spatial = SpatialSoftmax()
-        
 
         # Contrastive loss layer
         self.fc = nn.Sequential(
-            nn.Linear(1024, 128),
+            nn.Linear(512 *7 *7, 128),
             nn.ReLU(),
             nn.Linear(128, 1)
         )
@@ -629,14 +627,12 @@ class DoubleFeature(nn.Module):
         bsz = x.size(0)
         x = x.view(bsz, 512, -1)
 
-        # Apply RNN layers
-        for rnn_layer in self.rnn:
-            x, _ = rnn_layer(x)
+        x, _ = self.rnn(x)
 
         x = x.view(bsz, 512, 7, 7)
 
         # Apply Spatial Softmax
-        x = self.spatial(x)
+        # x = self.spatial(x)
 
         x = x.view(bsz, -1)
 
