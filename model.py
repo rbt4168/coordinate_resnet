@@ -633,8 +633,6 @@ class DoubleFeature(nn.Module):
         # Apply RNN layer
         x, _ = self.rnn(x)
 
-        x += x
-
         x = x.view(bsz, 512, 7, 7)
 
         # Apply Spatial Softmax
