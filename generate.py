@@ -52,7 +52,7 @@ def generate_gaussian_image_and_coordinates(image_number):
     x2, y2 = random.randint(lower_bound, upper_bound), random.randint(lower_bound, upper_bound)
 
     # Set values at random coordinates with some randomness
-    values[x1, y1] = -100 * (random.random() * 1.5 + 0.5)
+    values[x1, y1] = 100 * (random.random() * 1.5 + 0.5)
     values[x2, y2] = 100 * (random.random() * 1.5 + 0.5)
 
     # Apply Gaussian filter to smooth the image

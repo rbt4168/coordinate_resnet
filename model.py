@@ -6,15 +6,56 @@ from torchvision.ops.feature_pyramid_network import FeaturePyramidNetwork
 from torchvision.models.feature_extraction import create_feature_extractor
 from einops import rearrange, repeat
 
+class MyAttention(nn.Module):
+    def __init__(self, hid_dim, n_heads, dropout, device):
+        super().__init__()
+
+        self.hid_dim = hid_dim
+        self.n_heads = n_heads
+
+        assert hid_dim % n_heads == 0
+
+        self.w_q = nn.Linear(hid_dim, hid_dim)
+        self.w_k = nn.Linear(hid_dim, hid_dim)
+        self.w_v = nn.Linear(hid_dim, hid_dim)
+
+        self.fc = nn.Linear(hid_dim, hid_dim)
+
+        self.drop_out = nn.Dropout(dropout)
+
+        self.scale = torch.sqrt(torch.FloatTensor([hid_dim // n_heads])).to(device)
+
+    def forward(self, query, key, value):
+        batch_size = query.shape[0]
+
+        matrix_Q = self.w_q(query)
+        matrix_K = self.w_k(key)
+        matrix_V = self.w_v(value)
+
+        matrix_Q = matrix_Q.view(batch_size, -1, self.n_heads, self.hid_dim ,self.n_heads).permute(0, 2, 1, 3)
+        matrix_K = matrix_K.view(batch_size, -1, self.n_heads, self.hid_dim ,self.n_heads).permute(0, 2, 1, 3)
+        matrix_V = matrix_V.view(batch_size, -1, self.n_heads, self.hid_dim ,self.n_heads).permute(0, 2, 1, 3)
+
+        energy = torch.matmul(matrix_Q, matrix_K.permute(0, 1, 3, 2)) / self.scale
+        attention = self.drop_out(torch.softmax(energy, dim=-1))
+
+        x = torch.matmul(attention, matrix_V)
+        x = x.permute(0, 2, 1, 3).contiguous()
+        x = x.view(batch_size, -1, self.n_heads * (self.hid_dim // self.n_heads))
+
+        x = self.fc(x)
+
+        return x
+
 class ResidualBlock(nn.Module):
     def __init__(self, dim):
         super(ResidualBlock, self).__init__()
         # conv with group norm
         self.conv = nn.Sequential(
-            nn.Conv2d(dim, dim, 3, padding=1),
+            nn.Conv2d(dim, dim, 3, padding=0),
             nn.GroupNorm(32, dim),
             nn.GELU(),
-            nn.Conv2d(dim, dim, 3, padding=1),
+            nn.Conv2d(dim, dim, 3, padding=0),
             nn.GroupNorm(32, dim),
         )
     def forward(self, x):
@@ -37,7 +78,7 @@ class SpatialAttention(nn.Module):
             nn.Conv2d(in_dim, in_dim, 1),
             nn.GELU(),
         )
-        self.attention = nn.MultiheadAttention(in_dim, num_heads=num_heads, batch_first=True)
+        self.attention = nn.MultiheadAttention(in_dim, num_heads=num_heads, batch_first=True) # MyAttention(in_dim, num_heads, 0.2) 
 
     def forward(self, x_in):
         # x: [b, c, h, w]
@@ -53,10 +94,10 @@ class MyResNet(nn.Module):
         super(MyResNet, self).__init__()
         # in_res = (224, 224)
         self.in_conv = nn.Sequential(
-            nn.Conv2d(3, 64, 7, stride=2, padding=3),
+            nn.Conv2d(3, 64, 7, stride=2, padding=0),
             nn.GroupNorm(32, 64),
             nn.GELU(),
-            nn.MaxPool2d(3, stride=2, padding=1),
+            nn.MaxPool2d(3, stride=2, padding=0),
         ) # out_res = (56, 56)
         self.layer1 = nn.Sequential(
             GlobalModulation(64),
@@ -68,14 +109,14 @@ class MyResNet(nn.Module):
             GlobalModulation(128),
             ResidualBlock(128),
             ResidualBlock(128),
-            SpatialAttention(128),
+            # SpatialAttention(128),
         ) # out_res = (28, 28)
         self.down2 = DownBlock(128, 256) # out_res = (14, 14)
         self.layer3 = nn.Sequential(
             GlobalModulation(256),
             ResidualBlock(256),
             ResidualBlock(256),
-            SpatialAttention(256),
+            # SpatialAttention(256),
         ) # out_res = (14, 14)
         self.down3 = DownBlock(256, 512) # out_res = (7, 7)
         self.layer4 = nn.Sequential(
@@ -98,6 +139,127 @@ class MyResNet(nn.Module):
         x = self.layer4(x) + x
         x = self.spatial_softmax(x).reshape(x.shape[0], -1)
         return self.out_fc(x)
+
+# Define the basic residual block
+class XResidualBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1):
+        super(XResidualBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+
+        # If the input and output dimensions do not match, use a 1x1 convolutional layer
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels)
+            )
+
+    def forward(self, x):
+        residual = x
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out += self.shortcut(residual)  # Add the residual
+        out = self.relu(out)
+        return out
+
+class XSelfAttention(nn.Module):
+    def __init__(self, in_channels):
+        super(XSelfAttention, self).__init__()
+        self.query = nn.Conv2d(in_channels, in_channels // 8, kernel_size=1)
+        self.key = nn.Conv2d(in_channels, in_channels // 8, kernel_size=1)
+        self.value = nn.Conv2d(in_channels, in_channels, kernel_size=1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+
+    def forward(self, x):
+        batch_size, num_channels, height, width = x.size()
+        query = self.query(x).view(batch_size, -1, height * width).permute(0, 2, 1)
+        key = self.key(x).view(batch_size, -1, height * width)
+        energy = torch.bmm(query, key)
+        attention = torch.softmax(energy, dim=-1)
+        value = self.value(x).view(batch_size, -1, height * width)
+
+        out = torch.bmm(value, attention.permute(0, 2, 1))
+        out = out.view(batch_size, num_channels, height, width)
+        out = self.gamma * out + x
+        return out
+
+class ResidualBlockWithAttention(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1):
+        super(ResidualBlockWithAttention, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.attention = XSelfAttention(out_channels)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels)
+            )
+
+    def forward(self, x):
+        residual = x
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.attention(out)  # Apply self-attention
+        out += self.shortcut(residual)
+        out = self.relu(out)
+        return out
+
+# Define the ResNet architecture
+class XResNet(nn.Module):
+    def __init__(self, block, layers, num_classes=1):
+        super(XResNet, self).__init__()
+        self.in_channels = 64
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        self.layer1 = self.make_layer(block, 64, layers[0], stride=1)
+        self.layer2 = self.make_layer(block, 128, layers[1], stride=2)
+        self.layer3 = self.make_layer(block, 256, layers[2], stride=2)
+        self.layer4 = self.make_layer(block, 512, layers[3], stride=2)
+
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512, num_classes)
+
+    def make_layer(self, block, out_channels, blocks, stride=1):
+        layers = []
+        layers.append(block(self.in_channels, out_channels, stride))
+        self.in_channels = out_channels
+        for _ in range(1, blocks):
+            layers.append(block(out_channels, out_channels, stride=1))
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
 
 class GlobalModulation(nn.Module):
     def __init__(self, in_dim):
@@ -413,12 +575,14 @@ def get_model(model_name, pretrained=False):
         model = HybridResNet18(pretrained=pretrained, fc_type="mlp2")
     elif model_name == "FPN_mlp2_resnet18":
         model = FPN(pretrained=pretrained, fc_type="mlp2")
+    elif model_name == "testing":
+        model = XResNet(ResidualBlockWithAttention, [2, 2, 2, 2])
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     return model
 
 if __name__ == "__main__":
-    model = SpatialResNet18ColorGate()
+    model = XResNet(XResidualBlock, [2, 2, 2, 2])
     dummy = torch.zeros(1, 3, 224, 224)
     out = model(dummy)
     print(out)
