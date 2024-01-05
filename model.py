@@ -599,6 +599,35 @@ class ResNet18(nn.Module):
     def forward(self, x):
         return self.resnet18(x)
     
+class DoubleFeature(nn.Module):
+    def __init__(self) -> None:
+        super(DoubleFeature, self).__init__()
+
+        # Load a pre-trained ResNet-18 model as the extractor
+        self.resnet18 = torchvision.models.resnet18(pretrained=False)
+        self.resnet18.avgpool = SpatialSoftmax()
+        self.resnet18.fc = nn.Sequential(
+            nn.Linear(1024, 1024)
+        )
+
+        # Contrastive loss layer
+        self.fc1 = nn.Linear(1024, 32)
+        self.fc1_2 = nn.Linear(32, 1)
+        self.fc2 = nn.Sequential(
+            nn.ReLU(),
+            nn.Linear(1024 + 32, 1),
+        )
+
+    def forward(self, x):
+        x = self.resnet18(x)
+
+        y1 = self.fc1(x)
+        y2 = self.fc2(torch.concat([x, y1], dim=1))
+        y1 = self.fc1_2(y1)
+
+        # Compute the contrastive loss
+        return torch.abs(y1 - y2)
+
 def get_model(model_name, pretrained=False):
     if model_name == "spatial_resnet18":
         model = SpatialResNet18(pretrained=pretrained)
@@ -617,13 +646,13 @@ def get_model(model_name, pretrained=False):
     elif model_name == "FPN_mlp2_resnet18":
         model = FPN(pretrained=pretrained, fc_type="mlp2")
     elif model_name == "testing":
-        model = XResNet(ResidualBlockWithAttention, [2, 2, 2, 2])
+        model = DoubleFeature()
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     return model
 
 if __name__ == "__main__":
-    model = XResNet(ResidualBlockWithAttention, [2, 2, 2, 2])
+    model = DoubleFeature()
     dummy = torch.zeros(1, 3, 224, 224)
     out = model(dummy)
     print(out)
