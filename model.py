@@ -606,9 +606,7 @@ class DoubleFeature(nn.Module):
         # Load a pre-trained ResNet-18 model as the extractor
         self.resnet18 = torchvision.models.resnet18(pretrained=False)
         self.resnet18.avgpool = SpatialSoftmax()
-        self.resnet18.fc = nn.Sequential(
-            nn.Linear(1024, 1024)
-        )
+        self.resnet18.fc = nn.Sequential()
 
         # Contrastive loss layer
         self.fc1 = nn.Linear(1024, 32)
