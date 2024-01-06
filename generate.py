@@ -77,7 +77,7 @@ def generate_gaussian_image_and_coordinates(image_number):
     plt.imshow(color_array)
 
     # Save the generated image with a recognizable name
-    plt.savefig(f"pictures/arr{image_number}.png", dpi=56, bbox_inches='tight', pad_inches=0)
+    plt.savefig(f"pictures/arr{image_number}.jpg", dpi=56, bbox_inches='tight', pad_inches=0)
     plt.close()
 
     # Store coordinates in a dictionary for each image
@@ -101,9 +101,9 @@ if __name__ == "__main__":
     
     # Create a pool of processes
     pool = mp.Pool(mp.cpu_count())
-    n_imgs = 10000
+    n_imgs = 100
     # Generate images and coordinates for a specified number of iterations
-    for i, image_coordinates in enumerate(pool.imap(generate_gaussian_image_and_coordinates, range(int(10000)))):
+    for i, image_coordinates in enumerate(tqdm.tqdm(pool.imap(generate_gaussian_image_and_coordinates, range(int(n_imgs))))):
         coordinates_dict[f"arr{i}.png"] = image_coordinates
 
     # Save the coordinates dictionary to a JSON file
