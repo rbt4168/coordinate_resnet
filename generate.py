@@ -101,10 +101,10 @@ if __name__ == "__main__":
     
     # Create a pool of processes
     pool = mp.Pool(mp.cpu_count())
-    n_imgs = 100
+    n_imgs = 100000
     # Generate images and coordinates for a specified number of iterations
     for i, image_coordinates in enumerate(tqdm.tqdm(pool.imap(generate_gaussian_image_and_coordinates, range(int(n_imgs))))):
-        coordinates_dict[f"arr{i}.png"] = image_coordinates
+        coordinates_dict[f"arr{i}.jpg"] = image_coordinates
 
     # Save the coordinates dictionary to a JSON file
     save_coordinates_to_json(coordinates_dict, "ans.json")
