@@ -606,27 +606,33 @@ class DoubleFeature(nn.Module):
 
         # Load a pre-trained ResNet-18 model as the extractor
         self.resnet18 = nn.Sequential(
-            nn.Conv2d(3, 1, kernel_size=3, stride=1, padding=1)
+            nn.Conv2d(3, 16, kernel_size=7, stride=4, padding=0),
+            nn.GroupNorm(2, 16),
+            nn.GELU(),
+            nn.MaxPool2d(3, stride=2, padding=0),
         ) # torchvision.models.resnet18(pretrained=False)
         # self.resnet18.avgpool = nn.Sequential()
         # self.resnet18.fc = nn.Sequential()
 
         # RNN layer
         # self.rnn = nn.LSTM(input_size=49, hidden_size=49, num_layers=3, batch_first=True)
-        self.rnn = nn.RNN(input_size=49, hidden_size=1024, num_layers=2, batch_first=True)
+        self.rnn = nn.RNN(input_size=729, hidden_size=1024, num_layers=2, batch_first=True)
 
         self.spatial = SpatialSoftmax()
 
         # Contrastive loss layer
         self.fc = nn.Sequential(
-            nn.Linear(224*224, 128),
+            nn.Linear(16*729, 1024),
             nn.ReLU(),
-            nn.Linear(128, 1)
+            nn.Linear(1024, 1)
         )
 
     def forward(self, x):
         x = self.resnet18(x)
-        x = einops.rearrange(x, "b c h w -> b (c h w)")
+        x = einops.rearrange(x, "b c h w -> b c (h w)")
+        self.rnn(x)
+        x = einops.rearrange(x, "b c v -> b (c v)")
+        print(x.size())
         x = self.fc(x)
         # bsz = x.size(0)
         # x = x.view(bsz, 512, -1)
