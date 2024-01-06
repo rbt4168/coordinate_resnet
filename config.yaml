@@ -43,8 +43,14 @@ normAndCoordAndFPN:
 globalMod:
   normalize: True
   bs: 32
-  epochs: 100
+  epochs: 50
   model: spatial_global_resnet18
+
+normAttn:
+  normalize: True
+  bs: 32
+  epochs: 50
+  model: attn_resnet18
 
 normAndCoordAndMLP2Spectrum:
   dataset: spectrum
@@ -73,3 +79,5 @@ normFPNSpectrum:
   bs: 32
   epochs: 50
   model: FPN_mlp2_resnet18
+
+

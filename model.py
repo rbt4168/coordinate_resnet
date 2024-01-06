@@ -47,6 +47,35 @@ class SpatialAttention(nn.Module):
         x = self.attention(x, x, x)[0]
         x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w)
         return x + x_in
+
+class AttentionPool(nn.Module):
+    def __init__(self, in_dim=512):
+        super(AttentionPool, self).__init__()
+        self.in_conv = nn.Sequential(
+            nn.Conv2d(in_dim, in_dim, 1),
+            nn.GELU(),
+        )
+        self.lstm = nn.LSTM(in_dim, in_dim, batch_first=True, bidirectional=True)
+
+        self.out_fc = nn.Sequential(
+            nn.Linear(in_dim*4, in_dim),
+            nn.GELU(),
+        )
+    
+    def forward(self, x):
+        # x: [b, c, h, w]
+        b, c, h, w = x.shape
+        x = self.in_conv(x)
+        x_h = torch.max(x, dim=2)[0] # [b, c, w]
+        x_w = torch.max(x, dim=3)[0] # [b, c, h]
+        x_h = rearrange(x_h, 'b c w -> b w c')
+        x_w = rearrange(x_w, 'b c h -> b h c')
+        x_h, _ = self.lstm(x_h)
+        x_w, _ = self.lstm(x_w)
+        x_h = torch.max(x_h, dim=1)[0] # [b, c]
+        x_w = torch.max(x_w, dim=1)[0] # [b, c]
+        x = torch.cat((x_h, x_w), dim=1)
+        return self.out_fc(x)
     
 class MyResNet(nn.Module):
     def __init__(self, *args, **kwargs):
@@ -58,45 +87,29 @@ class MyResNet(nn.Module):
             nn.GELU(),
             nn.MaxPool2d(3, stride=2, padding=1),
         ) # out_res = (56, 56)
+        # AttentionPool
+        self.attention_pool0 = AttentionPool(64, n_tokens=8, max_len=56*56)
         self.layer1 = nn.Sequential(
-            GlobalModulation(64),
-            ResidualBlock(64),
-            ResidualBlock(64),  
-        ) # out_res = (56, 56)
-        self.down1 = DownBlock(64, 128) # out_res = (28, 28)
+            DownBlock(64, 128),
+            *[ResidualBlock(128) for _ in range(2)],
+        )
+        self.attention_pool1 = AttentionPool(128, n_tokens=8, max_len=28*28)
         self.layer2 = nn.Sequential(
-            GlobalModulation(128),
-            ResidualBlock(128),
-            ResidualBlock(128),
-            SpatialAttention(128),
-        ) # out_res = (28, 28)
-        self.down2 = DownBlock(128, 256) # out_res = (14, 14)
-        self.layer3 = nn.Sequential(
-            GlobalModulation(256),
-            ResidualBlock(256),
-            ResidualBlock(256),
-            SpatialAttention(256),
-        ) # out_res = (14, 14)
-        self.down3 = DownBlock(256, 512) # out_res = (7, 7)
-        self.layer4 = nn.Sequential(
-            GlobalModulation(512),
-            ResidualBlock(512),
-            ResidualBlock(512),
-            SpatialAttention(512),
-        ) # out_res = (7, 7)
-        self.spatial_softmax = SpatialSoftmax()
-        self.out_fc = nn.Linear(1024, 1)
+            DownBlock(128, 256),
+            *[ResidualBlock(256) for _ in range(2)],
+        )
+        self.attention_pool2 = AttentionPool(256, n_tokens=8, max_len=14*14)
+
+        self.out_fc = nn.Linear(64+128+256, 1)
 
     def forward(self, x):
         x = self.in_conv(x)
-        x = self.layer1(x) + x
-        x = self.down1(x)
-        x = self.layer2(x) + x
-        x = self.down2(x)
-        x = self.layer3(x) + x
-        x = self.down3(x)
-        x = self.layer4(x) + x
-        x = self.spatial_softmax(x).reshape(x.shape[0], -1)
+        x0 = self.attention_pool0(x)
+        x = self.layer1(x)
+        x1 = self.attention_pool1(x)
+        x = self.layer2(x)
+        x2 = self.attention_pool2(x)
+        x = torch.cat((x0, x1, x2), dim=1)
         return self.out_fc(x)
 
 class GlobalModulation(nn.Module):
@@ -200,7 +213,7 @@ class RootSquareMLP(nn.Module):
         return x**0.5
     
 class SpatialResNet18(nn.Module):
-    def __init__(self, out_dim=1, pretrained=True, fc_type="mlp1"):
+    def __init__(self, out_dim=1, pretrained=False, fc_type="mlp1"):
         super(SpatialResNet18, self).__init__()
         self.resnet18 = torchvision.models.resnet18(pretrained=pretrained)
         self.resnet18.avgpool = SpatialSoftmax()
@@ -211,6 +224,29 @@ class SpatialResNet18(nn.Module):
         elif fc_type == "mlp2":
             self.resnet18.fc = nn.Sequential(
                 nn.Linear(1024, 1024),
+                nn.ReLU(),
+                nn.Linear(1024, out_dim)
+            )
+        elif fc_type == "mlpsquare":
+            self.resnet18.fc = RootSquareMLP(1024, out_dim)
+    def forward(self, x):
+        x = self.resnet18(x)
+        return x
+
+class AttnResNet18(nn.Module):
+    def __init__(self, out_dim=1, pretrained=False, fc_type="mlp1"):
+        super(AttnResNet18, self).__init__()
+        self.resnet18 = torchvision.models.resnet18(pretrained=pretrained)
+        self.resnet18.avgpool = nn.Sequential(
+            AttentionPool(512),
+        )
+        if fc_type == "mlp1":
+            self.resnet18.fc = nn.Sequential(
+                nn.Linear(512, out_dim),
+            )
+        elif fc_type == "mlp2":
+            self.resnet18.fc = nn.Sequential(
+                nn.Linear(512, 1024),
                 nn.ReLU(),
                 nn.Linear(1024, out_dim)
             )
@@ -413,6 +449,8 @@ def get_model(model_name, pretrained=False):
         model = HybridResNet18(pretrained=pretrained, fc_type="mlp2")
     elif model_name == "FPN_mlp2_resnet18":
         model = FPN(pretrained=pretrained, fc_type="mlp2")
+    elif model_name == "attn_resnet18":
+        model = AttnResNet18(pretrained=pretrained, fc_type="mlp2")
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     return model

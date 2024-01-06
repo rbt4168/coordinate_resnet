@@ -52,7 +52,7 @@ def generate_gaussian_image_and_coordinates(image_number):
     x2, y2 = random.randint(lower_bound, upper_bound), random.randint(lower_bound, upper_bound)
 
     # Set values at random coordinates with some randomness
-    values[x1, y1] = -100 * (random.random() * 1.5 + 0.5)
+    values[x1, y1] = 100 * (random.random() * 1.5 + 0.5)
     values[x2, y2] = 100 * (random.random() * 1.5 + 0.5)
 
     # Apply Gaussian filter to smooth the image
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     pool = mp.Pool(mp.cpu_count())
     n_imgs = 10000
     # Generate images and coordinates for a specified number of iterations
-    for i, image_coordinates in enumerate(pool.imap(generate_gaussian_image_and_coordinates, range(int(10000)))):
+    for i, image_coordinates in enumerate(tqdm.tqdm(pool.imap(generate_gaussian_image_and_coordinates, range(n_imgs)))):
         coordinates_dict[f"arr{i}.png"] = image_coordinates
 
     # Save the coordinates dictionary to a JSON file
