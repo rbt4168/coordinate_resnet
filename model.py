@@ -610,7 +610,7 @@ class DoubleFeature(nn.Module):
 
         # RNN layer
         # self.rnn = nn.LSTM(input_size=49, hidden_size=49, num_layers=3, batch_first=True)
-        self.rnn = nn.RNN(input_size=49, hidden_size=49, num_layers=2, batch_first=True)
+        self.rnn = nn.RNN(input_size=49, hidden_size=49, num_layers=5, batch_first=True)
 
         self.spatial = SpatialSoftmax()
 
