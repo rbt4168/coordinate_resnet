@@ -62,7 +62,7 @@ def generate_gaussian_image_and_coordinates(image_number):
     colors = [(0, 0, 1), (0, 1, 0), (1, 0, 0)]  # Red, Green, Blue
 
     # Create a custom colormap
-    custom_colormap = LinearSegmentedColormap.from_list('custom_colormap', random_color_map(), N=256)
+    custom_colormap = LinearSegmentedColormap.from_list('custom_colormap', colors, N=256)
 
     # Map values to colors array using the custom colormap
     color_array = custom_colormap(values)
