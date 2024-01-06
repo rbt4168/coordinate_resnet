@@ -632,7 +632,6 @@ class DoubleFeature(nn.Module):
         x = einops.rearrange(x, "b c h w -> b c (h w)")
         self.rnn(x)
         x = einops.rearrange(x, "b c v -> b (c v)")
-        print(x.size())
         x = self.fc(x)
         # bsz = x.size(0)
         # x = x.view(bsz, 512, -1)
