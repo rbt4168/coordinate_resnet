@@ -1,3 +1,4 @@
+import einops
 import torch
 from torch import nn
 from torch.nn.functional import softmax
@@ -604,9 +605,23 @@ class DoubleFeature(nn.Module):
         super(DoubleFeature, self).__init__()
 
         # Load a pre-trained ResNet-18 model as the extractor
-        self.resnet18 = torchvision.models.resnet18(pretrained=False)
-        self.resnet18.avgpool = nn.Sequential()
-        self.resnet18.fc = nn.Sequential()
+        self.resnet18 = nn.Sequential(
+            nn.Linear(3*224*224, 1024),
+            nn.ReLU(),
+            nn.BatchNorm1d(1024),
+            nn.Dropout(0.2),
+            nn.Linear(1024, 1024),
+            nn.ReLU(),
+            nn.BatchNorm1d(1024),
+            nn.Dropout(0.2),
+            nn.Linear(1024, 1024),
+            nn.ReLU(),
+            nn.BatchNorm1d(1024),
+            nn.Dropout(0.2),
+            nn.Linear(1024, 1),
+        ) # torchvision.models.resnet18(pretrained=False)
+        # self.resnet18.avgpool = nn.Sequential()
+        # self.resnet18.fc = nn.Sequential()
 
         # RNN layer
         # self.rnn = nn.LSTM(input_size=49, hidden_size=49, num_layers=3, batch_first=True)
@@ -622,24 +637,24 @@ class DoubleFeature(nn.Module):
         )
 
     def forward(self, x):
-        x = self.resnet18(x)
+        # x = self.resnet18(x)
 
         bsz = x.size(0)
-        x = x.view(bsz, 512, -1)
+        # x = x.view(bsz, 512, -1)
 
-        x, _ = self.rnn(x)
+        # x, _ = self.rnn(x)
 
-        x = x.view(bsz, 512, 7, 7)
+        # x = x.view(bsz, 512, 7, 7)
 
         # Apply Spatial Softmax
         # x = self.spatial(x)
         # print(x.size(), bsz)
-        x = x.reshape(bsz, -1)
+        # x = x.reshape(bsz, -1)
 
         # Apply final fully connected layers
-        x = self.fc(x)
-
-        return x
+        # x = self.fc(x)
+        x = einops.rearrange(x, "b c h w -> b (c h w)")
+        return self.resnet18(x)
 
 def get_model(model_name, pretrained=False):
     if model_name == "spatial_resnet18":
