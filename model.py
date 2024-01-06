@@ -633,8 +633,8 @@ class DoubleFeature(nn.Module):
 
         # Apply Spatial Softmax
         # x = self.spatial(x)
-
-        x = x.view(bsz, -1)
+        # print(x.size(), bsz)
+        x = x.reshape(bsz, -1)
 
         # Apply final fully connected layers
         x = self.fc(x)
@@ -666,7 +666,7 @@ def get_model(model_name, pretrained=False):
 
 if __name__ == "__main__":
     model = DoubleFeature()
-    dummy = torch.zeros(1, 3, 224, 224)
+    dummy = torch.zeros(2, 3, 224, 224)
     out = model(dummy)
     print(out)
     
