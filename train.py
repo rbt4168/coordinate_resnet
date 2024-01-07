@@ -17,7 +17,7 @@ class MyDataset(torch.utils.data.Dataset):
     def __init__(self, root="", transform=None):
         self.root = root
         self.transform = transform
-        picture_path = os.path.join(root, "pictures", "*.png")
+        picture_path = os.path.join(root, "pictures", "*.jpg")
         self.imgs = list(sorted(glob(picture_path)))
         with open("ans.json", "r") as f:
             self.ans = json.load(f)
@@ -42,7 +42,7 @@ class SpectrmuDataset(torch.utils.data.Dataset):
     def __init__(self, root="", transform=None):
         self.root = root
         self.transform = transform
-        picture_path = os.path.join(root, "resized_spectrum/new_spectrum", "*.jpg")
+        picture_path = os.path.join(root, "resized_spectrum/new_spectrum", "*.png")
         self.imgs = list(sorted(glob(picture_path)))
         with open(os.path.join(root, "label.json"), "r") as f:
             self.ans = json.load(f)
