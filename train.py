@@ -127,7 +127,7 @@ def train(args):
                 optimizer.zero_grad()
                 pred, aftim = model(img)
                 loss = criterion(pred.squeeze(), dist)
-                loss += criterion(aftim, spimg) * 0.01
+                loss += criterion(aftim, spimg)
                 accelerator.backward(loss)
                 optimizer.step()
                 train_loss.append(loss.item())
@@ -149,7 +149,7 @@ def train(args):
             pred, aftim = ema(img)
             # pred = model(img)
             loss = criterion(pred.squeeze(), dist)
-            loss += criterion(aftim, spimg) * 0.01
+            loss += criterion(aftim, spimg)
             dist_error = abs(pred.squeeze() - dist) 
             if norm_label:
                 dist_error = dist_error * 224.0
