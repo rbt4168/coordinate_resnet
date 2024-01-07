@@ -650,6 +650,36 @@ class DoubleFeature(nn.Module):
         # x = einops.rearrange(x, "b c h w -> b (c h w)")
         return x
 
+class EncoderDecoderModel(nn.Module):
+    def __init__(self):
+        super(EncoderDecoderModel, self).__init__()
+        
+        # Encoder (ResNet-18)
+        self.encoder = torchvision.models.resnet18(pretrained=False)
+        # Remove the classification head of ResNet-18
+        self.encoder = nn.Sequential(*list(self.encoder.children())[:-2])
+        
+        # Decoder
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 3, kernel_size=4, stride=2, padding=1),
+            nn.Tanh()
+        )
+
+    def forward(self, x):
+        # Forward pass through the encoder
+        x = self.encoder(x)
+        print(x.size())
+        # Forward pass through the decoder
+        x = self.decoder(x)
+        return x
+
+
 def get_model(model_name, pretrained=False):
     if model_name == "spatial_resnet18":
         model = SpatialResNet18(pretrained=pretrained)
