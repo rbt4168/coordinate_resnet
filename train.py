@@ -32,7 +32,7 @@ class MyDataset(torch.utils.data.Dataset):
         if self.transform is not None:
             img = self.transform(img)
         
-        special_img = transforms.Resize((85, 85))(img)
+        special_img = transforms.Resize(size=(85, 85), antialias=True)(img)
             
         label_data = self.ans[img_path.split("/")[-1]]
         dist = ((label_data["x1"] - label_data["x2"])**2 + 
@@ -127,7 +127,7 @@ def train(args):
                 optimizer.zero_grad()
                 pred, aftim = model(img)
                 loss = criterion(pred.squeeze(), dist)
-                loss += criterion(aftim, spimg)
+                loss += criterion(aftim, spimg) * 0.01
                 accelerator.backward(loss)
                 optimizer.step()
                 train_loss.append(loss.item())
@@ -149,7 +149,7 @@ def train(args):
             pred, aftim = ema(img)
             # pred = model(img)
             loss = criterion(pred.squeeze(), dist)
-            loss += criterion(aftim, spimg)
+            loss += criterion(aftim, spimg) * 0.01
             dist_error = abs(pred.squeeze() - dist) 
             if norm_label:
                 dist_error = dist_error * 224.0
