@@ -2,7 +2,7 @@
 # accelerate launch train.py --cfg_name norm
 # accelerate launch train.py --cfg_name coord
 # accelerate launch train.py --cfg_name normAndCoord
-accelerate launch train.py --cfg_name testing
+python train.py --cfg_name testing
 # accelerate launch train.py --cfg_name normAndCoordAndSquare
 # accelerate launch train.py --cfg_name normAndCoordAndMLP2
 # accelerate launch train.py --cfg_name normAndCoordAndFPN

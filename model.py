@@ -650,35 +650,55 @@ class DoubleFeature(nn.Module):
         # x = einops.rearrange(x, "b c h w -> b (c h w)")
         return x
 
-class EncoderDecoderModel(nn.Module):
+class EncoderDecoderDistanceModel(nn.Module):
     def __init__(self):
-        super(EncoderDecoderModel, self).__init__()
+        super(EncoderDecoderDistanceModel, self).__init__()
         
         # Encoder (ResNet-18)
         self.encoder = torchvision.models.resnet18(pretrained=False)
         # Remove the classification head of ResNet-18
         self.encoder = nn.Sequential(*list(self.encoder.children())[:-2])
         
+        # Fully Connected layer in the middle
+        self.fc_middle = nn.Linear(512, 256)
+        
+        # Additional network for distance calculation
+        self.distance_network = nn.Sequential(
+            nn.Linear(256, 128),
+            nn.ReLU(inplace=True),
+            nn.Linear(128, 1)
+        )
+        
         # Decoder
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose2d(256, 128, kernel_size=7, stride=4, padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose2d(128, 64, kernel_size=7, stride=4, padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(64, 3, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose2d(64, 3, kernel_size=7, stride=4, padding=1),
             nn.Tanh()
         )
 
     def forward(self, x):
         # Forward pass through the encoder
         x = self.encoder(x)
-        print(x.size())
+        
+        # Global average pooling
+        x = x.mean([2, 3])
+        
+        # Fully Connected layer in the middle
+        x = self.fc_middle(x)
+        
+        # Forward pass through the distance network
+        distance = self.distance_network(x)
+        
+        # Reshape to match the expected input size of the decoder
+        x = x.view(x.size(0), 256, 1, 1)
+        
         # Forward pass through the decoder
-        x = self.decoder(x)
-        return x
-
+        x_decoder = self.decoder(x)
+        
+        return distance, x_decoder
 
 def get_model(model_name, pretrained=False):
     if model_name == "spatial_resnet18":
@@ -698,13 +718,13 @@ def get_model(model_name, pretrained=False):
     elif model_name == "FPN_mlp2_resnet18":
         model = FPN(pretrained=pretrained, fc_type="mlp2")
     elif model_name == "testing":
-        model = DoubleFeature()
+        model = EncoderDecoderDistanceModel()
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     return model
 
 if __name__ == "__main__":
-    model = DoubleFeature()
+    model = EncoderDecoderDistanceModel()
     dummy = torch.zeros(2, 3, 224, 224)
     out = model(dummy)
     print(out)

@@ -31,12 +31,14 @@ class MyDataset(torch.utils.data.Dataset):
 
         if self.transform is not None:
             img = self.transform(img)
+        
+        special_img = transforms.Resize((85, 85))(img)
             
         label_data = self.ans[img_path.split("/")[-1]]
         dist = ((label_data["x1"] - label_data["x2"])**2 + 
                 (label_data["x2"] - label_data["y2"])**2)**0.5 
 
-        return img.float(), float(dist)
+        return img.float(), float(dist), special_img.float()
 
 class SpectrmuDataset(torch.utils.data.Dataset):
     def __init__(self, root="", transform=None):
@@ -61,7 +63,7 @@ class SpectrmuDataset(torch.utils.data.Dataset):
             
         label_data = self.ans[img_path.split("/")[-1]]
 
-        return img.float(), label_data
+        return img.float(), label_data, 
 
 def train(args):
     cfg_name = args.cfg_name
@@ -117,14 +119,15 @@ def train(args):
         train_loss = []
         with accelerator.autocast():
             device = accelerator.device
-            for img, dist in tqdm(train_loader):
+            for img, dist, spimg in tqdm(train_loader):
                 img = img.to(device).float()
                 dist = dist.to(device).float()
                 if norm_label:
                     dist = dist / 224.0
                 optimizer.zero_grad()
-                pred = model(img)
+                pred, aftim = model(img)
                 loss = criterion(pred.squeeze(), dist)
+                loss += criterion(aftim, spimg)
                 accelerator.backward(loss)
                 optimizer.step()
                 train_loss.append(loss.item())
@@ -138,14 +141,15 @@ def train(args):
         valid_corrects_5px = 0
         valid_corrects_10px = 0
         valid_corrects_20px = 0
-        for img, dist in tqdm(valid_loader):
+        for img, dist, spimg in tqdm(valid_loader):
             img = img.to(device)
             if norm_label:
                 dist = dist / 224.0
             dist = dist.to(device)
-            pred = ema(img)
+            pred, aftim = ema(img)
             # pred = model(img)
             loss = criterion(pred.squeeze(), dist)
+            loss += criterion(aftim, spimg)
             dist_error = abs(pred.squeeze() - dist) 
             if norm_label:
                 dist_error = dist_error * 224.0
